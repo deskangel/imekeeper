@@ -14,6 +14,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
         }
     }
     @Published public var currentFocusContext: FocusContext?
+    @Published public var currentFocusLockStatus: HierarchyItem.LockStatus = .unlocked
     @Published public var currentActiveSource: InputSourceModel?
     @Published public var isEnabled: Bool = true
     
@@ -87,9 +88,21 @@ public final class HierarchySettingsViewModel: ObservableObject {
         refreshTree()
     }
     
+    /// 切换某一层级节点的锁定状态
+    public func toggleLock(for item: HierarchyItem) {
+        store.toggleLock(for: item)
+        refreshTree()
+        if let context = currentFocusContext {
+            let gran = granularityManager.effectiveGranularity(for: context.bundleID, isBrowser: context.isBrowserApp)
+            self.currentFocusLockStatus = store.lockStatus(for: context, effectiveGranularity: gran)
+        }
+    }
+    
     /// 当焦点改变时，同步刷新状态
     public func handleFocusChanged(_ context: FocusContext) {
         self.currentFocusContext = context
         self.currentActiveSource = inputSourceManager.currentSource
+        let gran = granularityManager.effectiveGranularity(for: context.bundleID, isBrowser: context.isBrowserApp)
+        self.currentFocusLockStatus = store.lockStatus(for: context, effectiveGranularity: gran)
     }
 }

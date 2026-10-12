@@ -132,6 +132,9 @@ public struct HierarchySettingsView: View {
                             .foregroundColor(.accentColor)
                             .lineLimit(1)
                     }
+                    
+                    // 实时焦点锁定状态徽标
+                    liveFocusLockBadge
                 }
             }
             
@@ -155,6 +158,38 @@ public struct HierarchySettingsView: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
     
+    @ViewBuilder
+    private var liveFocusLockBadge: some View {
+        switch viewModel.currentFocusLockStatus {
+        case .locked(let level):
+            HStack(spacing: 2) {
+                Image(systemName: AppConstants.LockUI.lockedIconName)
+                    .font(.system(size: AppConstants.LockUI.lockIconSize))
+                Text(level.localizedName + AppConstants.LockUI.lockActionText)
+                    .font(.system(size: AppConstants.LockUI.lockTextSize, weight: .semibold))
+            }
+            .padding(.horizontal, AppConstants.LockUI.badgePaddingHorizontal)
+            .padding(.vertical, AppConstants.LockUI.badgePaddingVertical)
+            .background(levelColor(for: level).opacity(0.15))
+            .foregroundColor(levelColor(for: level))
+            .clipShape(Capsule())
+        case .inherited(let level):
+            HStack(spacing: 2) {
+                Image(systemName: AppConstants.LockUI.lockedIconName)
+                    .font(.system(size: AppConstants.LockUI.lockIconSize))
+                Text(AppConstants.LockUI.inheritedLockBadgeTextPrefix + level.localizedName + AppConstants.LockUI.lockActionText)
+                    .font(.system(size: AppConstants.LockUI.lockTextSize))
+            }
+            .padding(.horizontal, AppConstants.LockUI.badgePaddingHorizontal)
+            .padding(.vertical, AppConstants.LockUI.badgePaddingVertical)
+            .background(Color.secondary.opacity(0.12))
+            .foregroundColor(.secondary)
+            .clipShape(Capsule())
+        case .unlocked:
+            EmptyView()
+        }
+    }
+    
     private var treeOutlineListView: some View {
         List {
             OutlineGroup(viewModel.hierarchyItems, children: \.children) { item in
@@ -163,6 +198,9 @@ public struct HierarchySettingsView: View {
                     availableSources: viewModel.availableSources,
                     onUpdateSource: { newSourceID in
                         viewModel.updateSource(for: item, newSourceID: newSourceID)
+                    },
+                    onToggleLock: {
+                        viewModel.toggleLock(for: item)
                     },
                     onDelete: {
                         viewModel.deleteItem(item)
@@ -224,10 +262,19 @@ public struct HierarchySettingsView: View {
 
 // MARK: - Row View
 
+private func levelColor(for level: GranularityLevel) -> Color {
+    switch level {
+    case .app: return .blue
+    case .window: return .purple
+    case .field: return .orange
+    }
+}
+
 private struct HierarchyRowView: View {
     let item: HierarchyItem
     let availableSources: [InputSourceModel]
     let onUpdateSource: (String) -> Void
+    let onToggleLock: () -> Void
     let onDelete: () -> Void
     let onChangeGranularity: (String, GranularityLevel?) -> Void
     
@@ -251,6 +298,9 @@ private struct HierarchyRowView: View {
             }
             
             Spacer()
+            
+            // 锁定控制按钮与状态
+            lockControlButton
             
             // 如果是 App 节点，提供生效粒度调节器
             if case .app(let bundleID, let currentGranularity) = item.itemType {
@@ -277,6 +327,86 @@ private struct HierarchyRowView: View {
     private var isAppNode: Bool {
         if case .app = item.itemType { return true }
         return false
+    }
+    
+    private var lockControlButton: some View {
+        Button {
+            onToggleLock()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: lockIconName)
+                    .font(.system(size: AppConstants.LockUI.lockIconSize))
+                Text(lockBadgeText)
+                    .font(.system(size: AppConstants.LockUI.lockTextSize, weight: item.isLocked ? .semibold : .regular))
+                    .lineLimit(1)
+            }
+            .frame(width: AppConstants.LockUI.lockButtonWidth)
+            .padding(.vertical, AppConstants.LockUI.badgePaddingVertical)
+            .background(lockBadgeBackground)
+            .foregroundColor(lockBadgeForeground)
+            .cornerRadius(AppConstants.UI.badgeCornerRadius)
+        }
+        .buttonStyle(.plain)
+        .help(lockHelpText)
+    }
+    
+    private var lockIconName: String {
+        if item.isLocked || item.lockStatus.isProtected {
+            return AppConstants.LockUI.lockedIconName
+        }
+        return AppConstants.LockUI.unlockedIconName
+    }
+    
+    private var lockBadgeText: String {
+        switch item.lockStatus {
+        case .locked(let level):
+            switch level {
+            case .app: return AppConstants.LockUI.appLockBadgeText
+            case .window: return AppConstants.LockUI.windowLockBadgeText
+            case .field: return AppConstants.LockUI.fieldLockBadgeText
+            }
+        case .inherited(let level):
+            return AppConstants.LockUI.inheritedLockBadgeTextPrefix + level.localizedName
+        case .unlocked:
+            return AppConstants.LockUI.unlockedActionText
+        }
+    }
+    
+    private var lockBadgeForeground: Color {
+        switch item.lockStatus {
+        case .locked(let level):
+            return levelColor(for: level)
+        case .inherited:
+            return .secondary
+        case .unlocked:
+            return .secondary.opacity(0.8)
+        }
+    }
+    
+    private var lockBadgeBackground: Color {
+        switch item.lockStatus {
+        case .locked(let level):
+            return levelColor(for: level).opacity(0.15)
+        case .inherited:
+            return Color.secondary.opacity(0.12)
+        case .unlocked:
+            return Color(nsColor: .controlBackgroundColor)
+        }
+    }
+    
+    private var lockHelpText: String {
+        switch item.lockStatus {
+        case .locked(let level):
+            switch level {
+            case .app: return AppConstants.LockUI.appLockHelpText
+            case .window: return AppConstants.LockUI.windowLockHelpText
+            case .field: return AppConstants.LockUI.fieldLockHelpText
+            }
+        case .inherited:
+            return AppConstants.LockUI.inheritedLockHelpText
+        case .unlocked:
+            return AppConstants.LockUI.unlockedHelpText
+        }
     }
     
     @ViewBuilder

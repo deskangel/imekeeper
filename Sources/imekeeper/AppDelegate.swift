@@ -141,6 +141,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             isBrowser: context.isBrowserApp
         )
         
+        // 关键防护：如果当前上下文（或所属层级）已处于锁定状态，临时手动切换输入法不更新设置
+        if profileStore.isContextLocked(for: context, effectiveGranularity: effectiveGranularity) {
+            return
+        }
+        
         // 用户主动切换：即时更新当前层级绑定的输入法
         profileStore.record(
             context: context,
@@ -152,7 +157,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func updateStatusItemState() {
         let currentName = inputSourceManager.currentSource.localizedName
-        menuBarController.updateState(isEnabled: isEnabled, currentSourceName: currentName)
+        let isLocked: Bool
+        if let context = currentFocusContext {
+            let effectiveGranularity = granularityManager.effectiveGranularity(
+                for: context.bundleID,
+                isBrowser: context.isBrowserApp
+            )
+            isLocked = profileStore.isContextLocked(for: context, effectiveGranularity: effectiveGranularity)
+        } else {
+            isLocked = false
+        }
+        menuBarController.updateState(isEnabled: isEnabled, currentSourceName: currentName, isLocked: isLocked)
     }
     
     // MARK: - Permission

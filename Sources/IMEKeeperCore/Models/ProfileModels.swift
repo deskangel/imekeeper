@@ -14,6 +14,9 @@ public struct FieldProfile: Codable, Identifiable, Hashable, Sendable {
     /// 记忆绑定的输入法 ID
     public var sourceID: String
     
+    /// 是否锁定输入法（锁定后临时切换不更新设置）
+    public var isLocked: Bool
+    
     /// 最后更新时间
     public var lastUpdated: Date
     
@@ -22,13 +25,29 @@ public struct FieldProfile: Codable, Identifiable, Hashable, Sendable {
         fieldIdentifier: String,
         role: String,
         sourceID: String,
+        isLocked: Bool = false,
         lastUpdated: Date = Date()
     ) {
         self.id = id
         self.fieldIdentifier = fieldIdentifier
         self.role = role
         self.sourceID = sourceID
+        self.isLocked = isLocked
         self.lastUpdated = lastUpdated
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case id, fieldIdentifier, role, sourceID, isLocked, lastUpdated
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.fieldIdentifier = try container.decode(String.self, forKey: .fieldIdentifier)
+        self.role = try container.decode(String.self, forKey: .role)
+        self.sourceID = try container.decode(String.self, forKey: .sourceID)
+        self.isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
+        self.lastUpdated = try container.decodeIfPresent(Date.self, forKey: .lastUpdated) ?? Date()
     }
 }
 
@@ -46,6 +65,9 @@ public struct WindowProfile: Codable, Identifiable, Hashable, Sendable {
     /// 该窗口内记录的各输入框字典（key 为 fieldID）
     public var fields: [String: FieldProfile]
     
+    /// 是否锁定输入法（锁定后该窗口临时切换不更新设置）
+    public var isLocked: Bool
+    
     /// 最后更新时间
     public var lastUpdated: Date
     
@@ -54,13 +76,29 @@ public struct WindowProfile: Codable, Identifiable, Hashable, Sendable {
         windowTitle: String,
         lastSourceID: String,
         fields: [String: FieldProfile] = [:],
+        isLocked: Bool = false,
         lastUpdated: Date = Date()
     ) {
         self.id = id
         self.windowTitle = windowTitle
         self.lastSourceID = lastSourceID
         self.fields = fields
+        self.isLocked = isLocked
         self.lastUpdated = lastUpdated
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case id, windowTitle, lastSourceID, fields, isLocked, lastUpdated
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.windowTitle = try container.decode(String.self, forKey: .windowTitle)
+        self.lastSourceID = try container.decode(String.self, forKey: .lastSourceID)
+        self.fields = try container.decodeIfPresent([String: FieldProfile].self, forKey: .fields) ?? [:]
+        self.isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
+        self.lastUpdated = try container.decodeIfPresent(Date.self, forKey: .lastUpdated) ?? Date()
     }
 }
 
@@ -81,6 +119,9 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
     /// 该应用内记录的窗口字典（key 为 windowID）
     public var windows: [String: WindowProfile]
     
+    /// 是否锁定输入法（锁定后该应用内所有窗口和输入框临时切换均不更新设置）
+    public var isLocked: Bool
+    
     /// 最后更新时间
     public var lastUpdated: Date
     
@@ -90,6 +131,7 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
         configuredGranularity: GranularityLevel? = nil,
         lastSourceID: String,
         windows: [String: WindowProfile] = [:],
+        isLocked: Bool = false,
         lastUpdated: Date = Date()
     ) {
         self.id = id
@@ -97,7 +139,23 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
         self.configuredGranularity = configuredGranularity
         self.lastSourceID = lastSourceID
         self.windows = windows
+        self.isLocked = isLocked
         self.lastUpdated = lastUpdated
+    }
+    
+    private enum CodingKeys: String, CodingKey {
+        case id, appName, configuredGranularity, lastSourceID, windows, isLocked, lastUpdated
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.appName = try container.decode(String.self, forKey: .appName)
+        self.configuredGranularity = try container.decodeIfPresent(GranularityLevel.self, forKey: .configuredGranularity)
+        self.lastSourceID = try container.decode(String.self, forKey: .lastSourceID)
+        self.windows = try container.decodeIfPresent([String: WindowProfile].self, forKey: .windows) ?? [:]
+        self.isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
+        self.lastUpdated = try container.decodeIfPresent(Date.self, forKey: .lastUpdated) ?? Date()
     }
 }
 
@@ -109,11 +167,29 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         case field(bundleID: String, windowID: String, fieldID: String)
     }
     
+    /// 区分三个不同层次的锁定状态与继承保护
+    public enum LockStatus: Hashable, Sendable {
+        case unlocked
+        case locked(level: GranularityLevel)
+        case inherited(from: GranularityLevel)
+        
+        public var isProtected: Bool {
+            switch self {
+            case .unlocked:
+                return false
+            case .locked, .inherited:
+                return true
+            }
+        }
+    }
+    
     public let id: String
     public let title: String
     public let subtitle: String?
     public let itemType: ItemType
     public var currentSourceID: String
+    public var isLocked: Bool
+    public var lockStatus: LockStatus
     public var children: [HierarchyItem]?
     
     public init(
@@ -122,6 +198,8 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         subtitle: String? = nil,
         itemType: ItemType,
         currentSourceID: String,
+        isLocked: Bool = false,
+        lockStatus: LockStatus = .unlocked,
         children: [HierarchyItem]? = nil
     ) {
         self.id = id
@@ -129,6 +207,8 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         self.subtitle = subtitle
         self.itemType = itemType
         self.currentSourceID = currentSourceID
+        self.isLocked = isLocked
+        self.lockStatus = lockStatus
         self.children = children
     }
 }

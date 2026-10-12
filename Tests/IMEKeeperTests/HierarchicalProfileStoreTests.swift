@@ -196,4 +196,140 @@ final class HierarchicalProfileStoreTests: XCTestCase {
         XCTAssertEqual(treeAfterWinUpdate.first?.children?.first?.currentSourceID, sourceJapanese)
         XCTAssertEqual(treeAfterWinUpdate.first?.children?.first?.children?.first?.currentSourceID, sourceJapanese)
     }
+    
+    func testLockingPreventsRecordOverwrite() {
+        let appBundleID = "com.apple.dt.Xcode"
+        let windowID = "win-main"
+        let fieldID = "field-code"
+        let sourceEnglish = "com.apple.keylayout.ABC"
+        let sourceChinese = "com.apple.inputmethod.SCIM.ITABC"
+        
+        let context = FocusContext(
+            bundleID: appBundleID,
+            appName: "Xcode",
+            windowID: windowID,
+            windowTitle: "Main.swift",
+            fieldID: fieldID,
+            fieldDescription: "代码编辑器",
+            role: "AXTextArea"
+        )
+        
+        // 初始记录为英文
+        store.record(context: context, sourceID: sourceEnglish, effectiveGranularity: .field)
+        
+        let tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let appItem = tree.first else {
+            XCTFail("应当成功构造大纲树")
+            return
+        }
+        
+        // 1. 切换 App 为锁定状态
+        store.toggleLock(for: appItem)
+        XCTAssertTrue(store.isContextLocked(for: context, effectiveGranularity: .app))
+        XCTAssertTrue(store.isContextLocked(for: context, effectiveGranularity: .window))
+        XCTAssertTrue(store.isContextLocked(for: context, effectiveGranularity: .field))
+        
+        // 2. 模拟临时手动切换输入法为中文并尝试 record 记录
+        store.record(context: context, sourceID: sourceChinese, effectiveGranularity: .app)
+        
+        // 3. 验证被锁定后，App 级输入法未被冲掉，依然保持英文
+        let queryResult = store.queryPreferredSource(for: context, effectiveGranularity: .app)
+        XCTAssertEqual(queryResult, sourceEnglish, "App 锁定后，临时切换输入法绝不覆盖记忆设置")
+    }
+    
+    func testThreeDistinctLockLevelsAndInheritance() {
+        let appBundleID = "com.test.Editor"
+        let win1ID = "win-1"
+        let win2ID = "win-2"
+        let field1ID = "field-1"
+        
+        let context1 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Editor",
+            windowID: win1ID,
+            windowTitle: "Window 1",
+            fieldID: field1ID,
+            fieldDescription: "Input",
+            role: "AXTextField"
+        )
+        let context2 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Editor",
+            windowID: win2ID,
+            windowTitle: "Window 2"
+        )
+        
+        store.record(context: context1, sourceID: "source.A", effectiveGranularity: .field)
+        store.record(context: context2, sourceID: "source.B", effectiveGranularity: .window)
+        
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let appNode = tree.first,
+              let win1Node = appNode.children?.first(where: { $0.id == "win:\(appBundleID):\(win1ID)" }),
+              let field1Node = win1Node.children?.first else {
+            XCTFail("节点结构不完整")
+            return
+        }
+        
+        // 初始状态均为 unlocked
+        XCTAssertEqual(appNode.lockStatus, .unlocked)
+        XCTAssertEqual(win1Node.lockStatus, .unlocked)
+        XCTAssertEqual(field1Node.lockStatus, .unlocked)
+        
+        // 1. 仅锁定窗口 win1Node
+        store.toggleLock(for: win1Node)
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let updatedWin1 = tree.first?.children?.first(where: { $0.id == win1Node.id })
+        let updatedField1 = updatedWin1?.children?.first
+        
+        XCTAssertEqual(updatedWin1?.lockStatus, .locked(level: .window))
+        XCTAssertEqual(updatedField1?.lockStatus, .inherited(from: .window), "窗口锁定后，下级输入框应当呈现继承窗口锁定")
+        
+        // 2. 解除窗口锁定，单独锁定输入框 field1
+        store.toggleLock(for: win1Node) // unlock win1
+        if let currentField = store.buildHierarchyItems(granularityManager: granularityManager).first?.children?.first?.children?.first {
+            store.toggleLock(for: currentField)
+        }
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let fieldOnlyWin = tree.first?.children?.first(where: { $0.id == win1Node.id })
+        let fieldOnlyField = fieldOnlyWin?.children?.first
+        
+        XCTAssertEqual(fieldOnlyWin?.lockStatus, .unlocked)
+        XCTAssertEqual(fieldOnlyField?.lockStatus, .locked(level: .field), "独立锁定输入框时，状态应当为输入框级锁定")
+        
+        // 3. 锁定整个 App
+        if let currentApp = tree.first {
+            store.toggleLock(for: currentApp)
+        }
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let appLockedApp = tree.first
+        let appLockedWin2 = appLockedApp?.children?.first(where: { $0.id == "win:\(appBundleID):\(win2ID)" })
+        XCTAssertEqual(appLockedApp?.lockStatus, .locked(level: .app))
+        XCTAssertEqual(appLockedWin2?.lockStatus, .inherited(from: .app), "App 锁定后，未显式锁定的窗口应当呈现继承应用锁定")
+    }
+    
+    func testLockedItemsSortedAtTop() {
+        let appA = "com.test.Alpha"
+        let appB = "com.test.Beta"
+        let appZ = "com.test.Zulu"
+        
+        let ctxA = FocusContext(bundleID: appA, appName: "Alpha", windowID: "win-a", windowTitle: "Win A")
+        let ctxB = FocusContext(bundleID: appB, appName: "Beta", windowID: "win-b", windowTitle: "Win B")
+        let ctxZ = FocusContext(bundleID: appZ, appName: "Zulu", windowID: "win-z", windowTitle: "Win Z")
+        
+        store.record(context: ctxA, sourceID: "s1", effectiveGranularity: .app)
+        store.record(context: ctxB, sourceID: "s2", effectiveGranularity: .app)
+        store.record(context: ctxZ, sourceID: "s3", effectiveGranularity: .app)
+        
+        // 锁定字母排序靠后的 Zulu
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        if let zuluNode = tree.first(where: { $0.title == "Zulu" }) {
+            store.toggleLock(for: zuluNode)
+        }
+        
+        // 重新构建树，验证 Zulu 被置顶在最前面
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        XCTAssertEqual(tree.first?.title, "Zulu", "被锁定的 App 必须严格置顶排序在列表最上方")
+        XCTAssertEqual(tree[1].title, "Alpha")
+        XCTAssertEqual(tree[2].title, "Beta")
+    }
 }

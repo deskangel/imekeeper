@@ -88,4 +88,30 @@ public enum AppConstants {
         public static let appRowIconSize: CGFloat = 16.0
         public static let liveStatusAppIconSize: CGFloat = 12.0
     }
+    
+    /// 锁定状态与徽标 UI 常量
+    public enum LockUI {
+        public static let appLockBadgeText = "应用锁定"
+        public static let windowLockBadgeText = "窗口锁定"
+        public static let fieldLockBadgeText = "输入框锁定"
+        public static let inheritedLockBadgeTextPrefix = "继承"
+        public static let lockActionText = "锁定"
+        public static let unlockedActionText = "未锁定"
+        
+        public static let lockedIconName = "lock.fill"
+        public static let unlockedIconName = "lock.open"
+        public static let lockShieldIconName = "lock.shield.fill"
+        
+        public static let lockIconSize: CGFloat = 11.0
+        public static let lockTextSize: CGFloat = 10.0
+        public static let badgePaddingHorizontal: CGFloat = 6.0
+        public static let badgePaddingVertical: CGFloat = 3.0
+        public static let lockButtonWidth: CGFloat = 86.0
+        
+        public static let appLockHelpText = "应用级锁定：此应用下的输入法已被固定，临时手动切换后不会更新设置"
+        public static let windowLockHelpText = "窗口级锁定：此窗口下的输入法已被固定，临时手动切换后不会更新设置"
+        public static let fieldLockHelpText = "输入框级锁定：此输入框下的输入法已被固定，临时手动切换后不会更新设置"
+        public static let inheritedLockHelpText = "受上级锁定保护：临时手动切换后不会更新设置"
+        public static let unlockedHelpText = "点击锁定此层级输入法，临时手动切换后不改变设置"
+    }
 }

@@ -10,6 +10,7 @@ public final class MenuBarController: NSObject {
     private let onToggleEnabled: () -> Void
     private let onCheckPermission: () -> Void
     private var isEnabled: Bool = true
+    private var isLocked: Bool = false
     private var currentSourceName: String = "未获取"
     
     public init(
@@ -24,9 +25,10 @@ public final class MenuBarController: NSObject {
         setupStatusItem()
     }
     
-    public func updateState(isEnabled: Bool, currentSourceName: String) {
+    public func updateState(isEnabled: Bool, currentSourceName: String, isLocked: Bool = false) {
         self.isEnabled = isEnabled
         self.currentSourceName = currentSourceName
+        self.isLocked = isLocked
         rebuildMenu()
     }
     
@@ -54,7 +56,8 @@ public final class MenuBarController: NSObject {
         statusItem.isEnabled = false
         menu.addItem(statusItem)
         
-        let currentSourceItem = NSMenuItem(title: "当前输入法: \(currentSourceName)", action: nil, keyEquivalent: "")
+        let lockSuffix = isLocked ? " (已锁定)" : ""
+        let currentSourceItem = NSMenuItem(title: "当前输入法: \(currentSourceName)\(lockSuffix)", action: nil, keyEquivalent: "")
         currentSourceItem.isEnabled = false
         menu.addItem(currentSourceItem)
         
