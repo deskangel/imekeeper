@@ -1,0 +1,89 @@
+import Foundation
+
+/// 系统全局常量定义，遵循严禁魔法数字与硬编码规范
+public enum AppConstants {
+    
+    /// 防抖与时序控制参数
+    public enum Timing {
+        /// 焦点切换防抖延迟（毫秒）：避免快速拖拽或瞬时失焦引起的频繁切换
+        public static let focusDebounceMilliseconds: Int = 35
+        
+        /// 程序化切换输入法后的状态抑制窗口（秒）：用于忽略系统自广播的 kTISNotifySelectedKeyboardInputSourceChanged 通知
+        public static let antiLoopSuppressionTimeoutSeconds: TimeInterval = 0.45
+        
+        /// 轮询或检查权限时的间隔（秒）
+        public static let permissionCheckIntervalSeconds: TimeInterval = 1.0
+    }
+    
+    /// 存储与缓存容量配置
+    public enum Storage {
+        /// 持久化数据文件名
+        public static let profileStorageFileName = "imekeeper_profiles.json"
+        
+        /// 粒度设置文件名
+        public static let granularityStorageFileName = "imekeeper_granularity.json"
+        
+        /// 应用程序支持目录子文件夹名称
+        public static let appSupportFolderName = "IMEKeeper"
+        
+        /// 内存中最多保留的应用层级指纹记录上限
+        public static let maxAppEntriesCount: Int = 500
+        
+        /// 单个应用下最多保留的输入框指纹数量
+        public static let maxFieldEntriesPerApp: Int = 300
+    }
+    
+    /// 浏览器应用 Bundle ID 集合（对于这些应用，强制截断至 Window 级别，不解析深层 DOM 控件）
+    public enum Browsers {
+        public static let knownBrowserBundleIDs: Set<String> = [
+            "com.apple.Safari",
+            "com.apple.SafariTechnologyPreview",
+            "com.google.Chrome",
+            "com.google.Chrome.canary",
+            "org.mozilla.firefox",
+            "org.mozilla.nightly",
+            "com.microsoft.edgemac",
+            "com.brave.Browser",
+            "company.thebrowser.Browser", // Arc Browser
+            "com.operasoftware.Opera",
+            "com.vivaldi.Vivaldi",
+            "com.uranus.sigmaos",
+            "com.kagi.kagimacOS" // Orion Browser
+        ]
+    }
+    
+    /// 辅助功能与无障碍属性常量
+    public enum Accessibility {
+        /// 申请辅助功能弹窗提示选项 Key
+        public static let trustedCheckOptionPromptKey = "AXTrustedCheckOptionPrompt"
+        
+        /// 安全输入（密码框）的角色标识
+        public static let secureTextFieldRole = "AXSecureTextField"
+        public static let textFieldRole = "AXTextField"
+        public static let textAreaRole = "AXTextArea"
+        public static let searchFieldRole = "AXSearchField"
+        public static let webAreaRole = "AXWebArea"
+        
+        /// 未知或默认占位名
+        public static let unknownWindowIdentifier = "UnknownWindow"
+        public static let unknownFieldIdentifier = "UnknownField"
+        public static let defaultWindowPlaceholder = "主窗口"
+    }
+    
+    /// 默认系统输入法 ID
+    public enum InputSource {
+        public static let defaultAsciiSourceID = "com.apple.keylayout.ABC"
+    }
+    
+    /// UI 布局与视图尺寸常量
+    public enum UI {
+        public static let settingsWindowWidth: CGFloat = 860.0
+        public static let settingsWindowHeight: CGFloat = 580.0
+        public static let minSettingsWindowWidth: CGFloat = 680.0
+        public static let minSettingsWindowHeight: CGFloat = 460.0
+        
+        public static let treeRowHeight: CGFloat = 34.0
+        public static let statusItemIconSize: CGFloat = 18.0
+        public static let badgeCornerRadius: CGFloat = 4.0
+    }
+}
