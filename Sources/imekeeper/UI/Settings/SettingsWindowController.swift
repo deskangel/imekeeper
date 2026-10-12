@@ -16,7 +16,9 @@ public final class SettingsWindowController {
     /// 显示设置窗口并激活至最前
     public func showWindow() {
         if let existing = window {
+            existing.level = .floating
             existing.makeKeyAndOrderFront(nil)
+            existing.orderFrontRegardless()
             NSApp.activate(ignoringOtherApps: true)
             return
         }
@@ -38,11 +40,13 @@ public final class SettingsWindowController {
         
         newWindow.title = "IME Keeper - 层级记忆与偏好设置"
         newWindow.contentViewController = hostingController
+        newWindow.level = .floating
         newWindow.center()
         newWindow.isReleasedWhenClosed = false
         
         self.window = newWindow
         newWindow.makeKeyAndOrderFront(nil)
+        newWindow.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 }
