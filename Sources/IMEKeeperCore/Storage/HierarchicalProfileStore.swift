@@ -122,11 +122,32 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         case .app(let bundleID, _):
             if var app = profiles[bundleID] {
                 app.lastSourceID = newSourceID
+                app.lastUpdated = Date()
+                // 级联更新该应用下所有已记录的窗口与输入框
+                for (winID, var win) in app.windows {
+                    win.lastSourceID = newSourceID
+                    win.lastUpdated = Date()
+                    for (fieldID, var field) in win.fields {
+                        field.sourceID = newSourceID
+                        field.lastUpdated = Date()
+                        win.fields[fieldID] = field
+                    }
+                    app.windows[winID] = win
+                }
                 profiles[bundleID] = app
             }
         case .window(let bundleID, let windowID):
             if var app = profiles[bundleID], var win = app.windows[windowID] {
                 win.lastSourceID = newSourceID
+                win.lastUpdated = Date()
+                app.lastSourceID = newSourceID
+                app.lastUpdated = Date()
+                // 级联更新该窗口下所有已记录的输入框
+                for (fieldID, var field) in win.fields {
+                    field.sourceID = newSourceID
+                    field.lastUpdated = Date()
+                    win.fields[fieldID] = field
+                }
                 app.windows[windowID] = win
                 profiles[bundleID] = app
             }
@@ -135,6 +156,11 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                var win = app.windows[windowID],
                var field = win.fields[fieldID] {
                 field.sourceID = newSourceID
+                field.lastUpdated = Date()
+                win.lastSourceID = newSourceID
+                win.lastUpdated = Date()
+                app.lastSourceID = newSourceID
+                app.lastUpdated = Date()
                 win.fields[fieldID] = field
                 app.windows[windowID] = win
                 profiles[bundleID] = app
@@ -189,10 +215,9 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         let sortedApps = profiles.values.sorted { $0.appName < $1.appName }
         
         for app in sortedApps {
-            let effectiveGranularity = granularityManager.effectiveGranularity(
-                for: app.id,
-                isBrowser: AppConstants.Browsers.knownBrowserBundleIDs.contains(app.id)
-            )
+            let isBrowser = AppConstants.Browsers.knownBrowserBundleIDs.contains(app.id)
+            let configuredGranularity = granularityManager.configuredGranularity(for: app.id)
+            let displayGranularity = configuredGranularity ?? granularityManager.getGlobalDefault()
             
             var windowItems: [HierarchyItem] = []
             let sortedWindows = app.windows.values.sorted { $0.windowTitle < $1.windowTitle }
@@ -223,11 +248,12 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                 windowItems.append(winItem)
             }
             
+            let browserHint = isBrowser && displayGranularity == .field ? " · 浏览器环境（受保护最高生效至窗口级）" : ""
             let appItem = HierarchyItem(
                 id: "app:\(app.id)",
                 title: app.appName,
-                subtitle: app.id,
-                itemType: .app(bundleID: app.id, granularity: effectiveGranularity),
+                subtitle: "\(app.id)\(browserHint)",
+                itemType: .app(bundleID: app.id, granularity: displayGranularity),
                 currentSourceID: app.lastSourceID,
                 children: windowItems.isEmpty ? nil : windowItems
             )

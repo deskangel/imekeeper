@@ -60,12 +60,31 @@ public final class FocusObserver: @unchecked Sendable {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
             return
         }
+        if isSelfApplication(app) {
+            detachCurrentObserver()
+            return
+        }
         attachToApp(app)
+    }
+    
+    private func isSelfApplication(_ app: NSRunningApplication) -> Bool {
+        if app.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            return true
+        }
+        if let bundleID = app.bundleIdentifier,
+           let myBundleID = Bundle.main.bundleIdentifier,
+           bundleID == myBundleID {
+            return true
+        }
+        return false
     }
     
     private func attachToApp(_ app: NSRunningApplication) {
         let pid = app.processIdentifier
-        guard pid > 0 else { return }
+        guard pid > 0, !isSelfApplication(app) else {
+            detachCurrentObserver()
+            return
+        }
         
         detachCurrentObserver()
         
@@ -141,6 +160,8 @@ public final class FocusObserver: @unchecked Sendable {
     }
     
     private func scheduleFocusResolution(element: AXUIElement, runningApp: NSRunningApplication) {
+        guard !isSelfApplication(runningApp) else { return }
+        
         lock.lock()
         debounceWorkItem?.cancel()
         

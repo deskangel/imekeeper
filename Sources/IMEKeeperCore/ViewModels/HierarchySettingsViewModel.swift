@@ -91,6 +91,5 @@ public final class HierarchySettingsViewModel: ObservableObject {
     public func handleFocusChanged(_ context: FocusContext) {
         self.currentFocusContext = context
         self.currentActiveSource = inputSourceManager.currentSource
-        refreshTree()
     }
 }

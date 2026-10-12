@@ -151,4 +151,49 @@ final class HierarchicalProfileStoreTests: XCTestCase {
             XCTFail("应当成功构造三级树节点")
         }
     }
+    
+    func testCascadingSourceUpdateFromAppAndWindow() {
+        let appBundleID = "com.apple.dt.Xcode"
+        let windowID = "win-main"
+        let fieldID = "field-code"
+        let sourceEnglish = "com.apple.keylayout.ABC"
+        let sourceChinese = "com.apple.inputmethod.SCIM.ITABC"
+        let sourceJapanese = "com.apple.inputmethod.Kotoeri.RomajiTyping.Japanese"
+        
+        let context = FocusContext(
+            bundleID: appBundleID,
+            appName: "Xcode",
+            windowID: windowID,
+            windowTitle: "Main.swift",
+            fieldID: fieldID,
+            fieldDescription: "代码编辑器",
+            role: "AXTextArea"
+        )
+        store.record(context: context, sourceID: sourceEnglish, effectiveGranularity: .field)
+        
+        let tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let appItem = tree.first,
+              let winItem = appItem.children?.first else {
+            XCTFail("应当成功构造大纲树")
+            return
+        }
+        
+        // 1. 在 App 级别修改输入法为中文，验证下属窗口和输入框全部级联更新
+        store.updateSource(for: appItem, newSourceID: sourceChinese)
+        XCTAssertEqual(store.queryPreferredSource(for: context, effectiveGranularity: .field), sourceChinese, "App 级别修改输入法必须级联覆盖其下所有输入框")
+        XCTAssertEqual(store.queryPreferredSource(for: context, effectiveGranularity: .window), sourceChinese, "App 级别修改输入法必须级联覆盖其下所有窗口")
+        
+        let treeAfterAppUpdate = store.buildHierarchyItems(granularityManager: granularityManager)
+        XCTAssertEqual(treeAfterAppUpdate.first?.currentSourceID, sourceChinese)
+        XCTAssertEqual(treeAfterAppUpdate.first?.children?.first?.currentSourceID, sourceChinese)
+        XCTAssertEqual(treeAfterAppUpdate.first?.children?.first?.children?.first?.currentSourceID, sourceChinese)
+        
+        // 2. 在 Window 级别修改输入法为日文，验证下属输入框级联更新
+        store.updateSource(for: winItem, newSourceID: sourceJapanese)
+        XCTAssertEqual(store.queryPreferredSource(for: context, effectiveGranularity: .field), sourceJapanese, "Window 级别修改输入法必须级联覆盖其下所有输入框")
+        
+        let treeAfterWinUpdate = store.buildHierarchyItems(granularityManager: granularityManager)
+        XCTAssertEqual(treeAfterWinUpdate.first?.children?.first?.currentSourceID, sourceJapanese)
+        XCTAssertEqual(treeAfterWinUpdate.first?.children?.first?.children?.first?.currentSourceID, sourceJapanese)
+    }
 }

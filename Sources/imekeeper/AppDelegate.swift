@@ -79,6 +79,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Core Event Handlers
     
     private func handleFocusChanged(_ context: FocusContext) {
+        // 关键过滤：忽略自身的焦点变化，绝不将 IME Keeper 自身加入记忆库或切换自身输入法
+        guard context.bundleID != Bundle.main.bundleIdentifier,
+              context.bundleID != "com.antigravity.imekeeper" else {
+            return
+        }
+        
         self.currentFocusContext = context
         updateStatusItemState()
         settingsViewModel.handleFocusChanged(context)
@@ -118,7 +124,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         updateStatusItemState()
         settingsViewModel.currentActiveSource = newSource
         
-        guard let context = currentFocusContext, !context.isSecureField else { return }
+        // 如果当前前台应用为 IME Keeper 自身（例如用户在设置面板中），不覆盖记录其他应用上下文
+        if let frontApp = NSWorkspace.shared.frontmostApplication,
+           frontApp.processIdentifier == ProcessInfo.processInfo.processIdentifier ||
+           frontApp.bundleIdentifier == Bundle.main.bundleIdentifier {
+            return
+        }
+        
+        guard let context = currentFocusContext,
+              !context.isSecureField,
+              context.bundleID != Bundle.main.bundleIdentifier,
+              context.bundleID != "com.antigravity.imekeeper" else { return }
         
         let effectiveGranularity = granularityManager.effectiveGranularity(
             for: context.bundleID,
