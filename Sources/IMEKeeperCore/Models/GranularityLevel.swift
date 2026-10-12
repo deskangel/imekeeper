@@ -15,26 +15,12 @@ public enum GranularityLevel: String, Codable, CaseIterable, Identifiable, Senda
     
     /// 用户界面展示标签
     public var localizedName: String {
-        switch self {
-        case .app:
-            return "应用级 (App)"
-        case .window:
-            return "窗口级 (Window)"
-        case .field:
-            return "输入框级 (Field)"
-        }
+        L10n.granularityName(for: self)
     }
     
     /// 详细说明描述
     public var detailDescription: String {
-        switch self {
-        case .app:
-            return "该 App 内所有窗口和输入框统一使用同一个输入法"
-        case .window:
-            return "按窗口分别记忆，同一窗口内的不同输入框共享"
-        case .field:
-            return "精细记忆同窗口内的各个输入框，按控件独立切换"
-        }
+        L10n.granularityDetail(for: self)
     }
     
     /// SF Symbols 图标名

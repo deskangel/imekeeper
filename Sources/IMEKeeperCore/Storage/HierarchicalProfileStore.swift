@@ -397,7 +397,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                     let fieldItem = HierarchyItem(
                         id: "field:\(app.id):\(win.id):\(field.id)",
                         title: field.fieldIdentifier.isEmpty ? field.role : field.fieldIdentifier,
-                        subtitle: "角色: \(field.role)",
+                        subtitle: L10n.fieldRoleSubtitle(role: field.role),
                         itemType: .field(bundleID: app.id, windowID: win.id, fieldID: field.id),
                         currentSourceID: field.sourceID,
                         isLocked: field.isLocked,
@@ -418,8 +418,8 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                 
                 let winItem = HierarchyItem(
                     id: "win:\(app.id):\(win.id)",
-                    title: win.windowTitle.isEmpty ? AppConstants.Accessibility.defaultWindowPlaceholder : win.windowTitle,
-                    subtitle: "包含 \(win.fields.count) 个输入框记录",
+                    title: win.windowTitle.isEmpty ? L10n.defaultWindowPlaceholder : win.windowTitle,
+                    subtitle: L10n.windowSubtitle(fieldCount: win.fields.count),
                     itemType: .window(bundleID: app.id, windowID: win.id),
                     currentSourceID: win.lastSourceID,
                     isLocked: win.isLocked,
@@ -429,7 +429,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                 windowItems.append(winItem)
             }
             
-            let browserHint = isBrowser && displayGranularity == .field ? " · 浏览器环境（受保护最高生效至窗口级）" : ""
+            let browserHint = isBrowser && displayGranularity == .field ? L10n.browserEnvironmentHint : ""
             let appLockStatus: HierarchyItem.LockStatus = app.isLocked ? .locked(level: .app) : .unlocked
             
             let appItem = HierarchyItem(

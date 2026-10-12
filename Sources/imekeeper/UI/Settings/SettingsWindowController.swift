@@ -13,9 +13,15 @@ public final class SettingsWindowController {
         self.viewModel = viewModel
     }
     
+    /// 动态刷新窗口标题
+    public func updateTitle() {
+        window?.title = L10n.settingsWindowTitle
+    }
+    
     /// 显示设置窗口并激活至最前
     public func showWindow() {
         if let existing = window {
+            existing.title = L10n.settingsWindowTitle
             existing.level = .floating
             existing.makeKeyAndOrderFront(nil)
             existing.orderFrontRegardless()
@@ -38,7 +44,7 @@ public final class SettingsWindowController {
             defer: false
         )
         
-        newWindow.title = "IME Keeper - 层级记忆与偏好设置"
+        newWindow.title = L10n.settingsWindowTitle
         newWindow.contentViewController = hostingController
         newWindow.level = .floating
         newWindow.center()

@@ -17,10 +17,12 @@ public final class HierarchySettingsViewModel: ObservableObject {
     @Published public var currentFocusLockStatus: HierarchyItem.LockStatus = .unlocked
     @Published public var currentActiveSource: InputSourceModel?
     @Published public var isEnabled: Bool = true
+    @Published public var currentLanguage: AppLanguage = LocalizationManager.shared.currentLanguage
     
     public let store: HierarchicalProfileStore
     public let granularityManager: GranularityManager
     public let inputSourceManager: InputSourceManagerProtocol
+    private var cancellables = Set<AnyCancellable>()
     
     public init(
         store: HierarchicalProfileStore,
@@ -33,8 +35,24 @@ public final class HierarchySettingsViewModel: ObservableObject {
         self.globalGranularity = granularityManager.getGlobalDefault()
         self.availableSources = inputSourceManager.availableSources
         self.currentActiveSource = inputSourceManager.currentSource
+        self.currentLanguage = LocalizationManager.shared.currentLanguage
+        
+        // 监听语言变化，自动重新生成树状大纲并刷新 UI
+        LocalizationManager.shared.$currentLanguage
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newLang in
+                guard let self = self else { return }
+                self.currentLanguage = newLang
+                self.refreshTree()
+            }
+            .store(in: &cancellables)
         
         refreshTree()
+    }
+    
+    /// 设置应用程序语言
+    public func setLanguage(_ language: AppLanguage) {
+        LocalizationManager.shared.setLanguage(language)
     }
     
     /// 刷新整棵大纲树

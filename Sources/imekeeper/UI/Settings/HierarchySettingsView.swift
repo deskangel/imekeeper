@@ -46,13 +46,13 @@ public struct HierarchySettingsView: View {
     private var topControlBar: some View {
         HStack(spacing: 12) {
             Image(systemName: "keyboard.badge.ellipsis")
-                .font(.system(size: 20))
+                .font(.system(size: AppConstants.UI.headerIconSize))
                 .foregroundColor(.accentColor)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text("IME Keeper")
                     .font(.headline)
-                Text("按层级组织管理各窗口与输入框的输入法记忆")
+                Text(L10n.settingsHeaderSubtitle)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -63,16 +63,16 @@ public struct HierarchySettingsView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
-                TextField("搜索应用或窗口...", text: $viewModel.searchQuery)
+                TextField(L10n.searchPlaceholder, text: $viewModel.searchQuery)
                     .textFieldStyle(.plain)
-                    .frame(width: 160)
+                    .frame(width: AppConstants.UI.searchFieldWidth)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+            .background(RoundedRectangle(cornerRadius: AppConstants.UI.searchFieldCornerRadius).fill(Color(nsColor: .controlBackgroundColor)))
             
             // 全局默认粒度
-            Picker("全局默认粒度:", selection: Binding(
+            Picker(L10n.defaultGranularityLabel, selection: Binding(
                 get: { viewModel.globalGranularity },
                 set: { viewModel.setGlobalGranularity($0) }
             )) {
@@ -81,12 +81,24 @@ public struct HierarchySettingsView: View {
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 180)
+            .frame(width: AppConstants.UI.globalGranularityPickerWidth)
+            
+            // 界面语言选择器
+            Picker(L10n.languagePickerLabel, selection: Binding(
+                get: { viewModel.currentLanguage },
+                set: { viewModel.setLanguage($0) }
+            )) {
+                ForEach(AppLanguage.allCases) { lang in
+                    Text(lang.displayName).tag(lang)
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(width: AppConstants.UI.languagePickerWidth)
             
             // 全局启用开关
             Toggle("", isOn: $viewModel.isEnabled)
                 .toggleStyle(.switch)
-                .help("启用/暂停自动切换输入法")
+                .help(L10n.toggleSwitchHelp)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -96,19 +108,19 @@ public struct HierarchySettingsView: View {
     private var liveStatusBar: some View {
         HStack(spacing: 16) {
             Label {
-                Text(viewModel.isEnabled ? "正在监控焦点" : "已暂停")
+                Text(viewModel.isEnabled ? L10n.liveMonitoringFocus : L10n.liveFocusPaused)
                     .font(.caption.bold())
             } icon: {
                 Circle()
                     .fill(viewModel.isEnabled ? Color.green : Color.orange)
-                    .frame(width: 8, height: 8)
+                    .frame(width: AppConstants.UI.liveStatusIndicatorSize, height: AppConstants.UI.liveStatusIndicatorSize)
             }
             
             if let context = viewModel.currentFocusContext {
                 Divider().frame(height: 12)
                 
                 HStack(spacing: 4) {
-                    Text("当前聚焦:")
+                    Text(L10n.liveFocusedPrefix)
                         .font(.caption)
                         .foregroundColor(.secondary)
                     if let icon = AppIconProvider.shared.icon(for: context.bundleID) {
@@ -142,7 +154,7 @@ public struct HierarchySettingsView: View {
             
             if let current = viewModel.currentActiveSource {
                 HStack(spacing: 4) {
-                    Text("活跃输入法:")
+                    Text(L10n.liveActiveSourcePrefix)
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text(current.localizedName)
@@ -165,7 +177,7 @@ public struct HierarchySettingsView: View {
             HStack(spacing: 2) {
                 Image(systemName: AppConstants.LockUI.lockedIconName)
                     .font(.system(size: AppConstants.LockUI.lockIconSize))
-                Text(level.localizedName + AppConstants.LockUI.lockActionText)
+                Text(level.localizedName + " " + L10n.lockActionText)
                     .font(.system(size: AppConstants.LockUI.lockTextSize, weight: .semibold))
             }
             .padding(.horizontal, AppConstants.LockUI.badgePaddingHorizontal)
@@ -177,7 +189,7 @@ public struct HierarchySettingsView: View {
             HStack(spacing: 2) {
                 Image(systemName: AppConstants.LockUI.lockedIconName)
                     .font(.system(size: AppConstants.LockUI.lockIconSize))
-                Text(AppConstants.LockUI.inheritedLockBadgeTextPrefix + level.localizedName + AppConstants.LockUI.lockActionText)
+                Text(L10n.inheritedLockBadgePrefix + level.localizedName + " " + L10n.lockActionText)
                     .font(.system(size: AppConstants.LockUI.lockTextSize))
             }
             .padding(.horizontal, AppConstants.LockUI.badgePaddingHorizontal)
@@ -218,12 +230,12 @@ public struct HierarchySettingsView: View {
         VStack(spacing: 12) {
             Spacer()
             Image(systemName: "tray")
-                .font(.system(size: 40))
+                .font(.system(size: AppConstants.UI.emptyPlaceholderIconSize))
                 .foregroundColor(.secondary)
-            Text("暂无捕获到的输入框记忆记录")
+            Text(L10n.emptyHistoryTitle)
                 .font(.headline)
                 .foregroundColor(.secondary)
-            Text("在其他应用中点击输入框或切换输入法后，将在此自动按层级记录。")
+            Text(L10n.emptyHistorySubtitle)
                 .font(.caption)
                 .foregroundColor(.secondary)
             Spacer()
@@ -236,19 +248,19 @@ public struct HierarchySettingsView: View {
             Button(role: .destructive) {
                 viewModel.clearAllHistory()
             } label: {
-                Label("清空所有历史", systemImage: "trash")
+                Label(L10n.clearAllHistory, systemImage: "trash")
             }
             .buttonStyle(.borderless)
             .foregroundColor(.secondary)
             
             Spacer()
             
-            Button("刷新可用输入法") {
+            Button(L10n.reloadInputSources) {
                 viewModel.reloadInputSources()
             }
             .buttonStyle(.bordered)
             
-            Button("完成") {
+            Button(L10n.doneButton) {
                 NSApp.keyWindow?.close()
             }
             .buttonStyle(.borderedProminent)
@@ -319,7 +331,7 @@ private struct HierarchyRowView: View {
                     .font(.system(size: 11))
             }
             .buttonStyle(.borderless)
-            .help("删除此项记忆")
+            .help(L10n.deleteItemHelp)
         }
         .frame(height: AppConstants.UI.treeRowHeight)
     }
@@ -361,14 +373,14 @@ private struct HierarchyRowView: View {
         switch item.lockStatus {
         case .locked(let level):
             switch level {
-            case .app: return AppConstants.LockUI.appLockBadgeText
-            case .window: return AppConstants.LockUI.windowLockBadgeText
-            case .field: return AppConstants.LockUI.fieldLockBadgeText
+            case .app: return L10n.appLockBadge
+            case .window: return L10n.windowLockBadge
+            case .field: return L10n.fieldLockBadge
             }
         case .inherited(let level):
-            return AppConstants.LockUI.inheritedLockBadgeTextPrefix + level.localizedName
+            return L10n.inheritedLockBadgePrefix + level.localizedName
         case .unlocked:
-            return AppConstants.LockUI.unlockedActionText
+            return L10n.unlockedActionText
         }
     }
     
@@ -398,14 +410,14 @@ private struct HierarchyRowView: View {
         switch item.lockStatus {
         case .locked(let level):
             switch level {
-            case .app: return AppConstants.LockUI.appLockHelpText
-            case .window: return AppConstants.LockUI.windowLockHelpText
-            case .field: return AppConstants.LockUI.fieldLockHelpText
+            case .app: return L10n.appLockHelpText
+            case .window: return L10n.windowLockHelpText
+            case .field: return L10n.fieldLockHelpText
             }
         case .inherited:
-            return AppConstants.LockUI.inheritedLockHelpText
+            return L10n.inheritedLockHelpText
         case .unlocked:
-            return AppConstants.LockUI.unlockedHelpText
+            return L10n.unlockedHelpText
         }
     }
     
@@ -444,8 +456,8 @@ private struct HierarchyRowView: View {
             }
         }
         .pickerStyle(.menu)
-        .frame(width: 135)
-        .help("设置该应用允许生效的最大追踪粒度")
+        .frame(width: AppConstants.UI.rowGranularityPickerWidth)
+        .help(L10n.granularityHelp)
     }
     
     private var inputSourcePicker: some View {
@@ -464,6 +476,6 @@ private struct HierarchyRowView: View {
             }
         }
         .pickerStyle(.menu)
-        .frame(width: 150)
+        .frame(width: AppConstants.UI.rowInputSourcePickerWidth)
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import IMEKeeperCore
 
 /// 应用程序生命周期与全局核心管道代理
@@ -17,6 +18,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private var currentFocusContext: FocusContext?
     private var isEnabled: Bool = true
+    private var cancellables = Set<AnyCancellable>()
     
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // 设置为主体 UI 代理，确保支持无 Dock 图标常驻
@@ -74,6 +76,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.handleUserManualSwitchedSource(newSource)
             }
         }
+        
+        // 3. 监听多语言切换事件，动态刷新菜单与窗口标题
+        LocalizationManager.shared.$currentLanguage
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                self.menuBarController.refreshMenu()
+                self.updateStatusItemState()
+                self.settingsWindowController.updateTitle()
+            }
+            .store(in: &cancellables)
     }
     
     // MARK: - Core Event Handlers
@@ -181,17 +194,17 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleCheckPermissionAction() {
         if permissionManager.isGranted {
             let alert = NSAlert()
-            alert.messageText = "辅助功能权限正常"
-            alert.informativeText = "IME Keeper 已获得系统辅助功能授权，正在正常运行。"
+            alert.messageText = L10n.permissionGrantedTitle
+            alert.informativeText = L10n.permissionGrantedMessage
             alert.alertStyle = .informational
             alert.runModal()
         } else {
             let alert = NSAlert()
-            alert.messageText = "需要辅助功能授权"
-            alert.informativeText = "IME Keeper 需要辅助功能权限以检测窗口和输入框焦点的变化。请在系统设置中启用授权。"
+            alert.messageText = L10n.permissionNeededTitle
+            alert.informativeText = L10n.permissionNeededMessage
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "打开系统设置")
-            alert.addButton(withTitle: "稍后")
+            alert.addButton(withTitle: L10n.openSystemSettingsButton)
+            alert.addButton(withTitle: L10n.laterButton)
             let response = alert.runModal()
             if response == .alertFirstButtonReturn {
                 permissionManager.openSystemSettingsAccessibilityPage()

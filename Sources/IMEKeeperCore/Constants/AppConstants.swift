@@ -31,6 +31,9 @@ public enum AppConstants {
         
         /// 单个应用下最多保留的输入框指纹数量
         public static let maxFieldEntriesPerApp: Int = 300
+        
+        /// 应用程序语言偏好持久化 Key
+        public static let appLanguageStorageKey = "imekeeper_selected_language"
     }
     
     /// 浏览器应用 Bundle ID 集合（对于这些应用，强制截断至 Window 级别，不解析深层 DOM 控件）
@@ -79,7 +82,7 @@ public enum AppConstants {
     public enum UI {
         public static let settingsWindowWidth: CGFloat = 860.0
         public static let settingsWindowHeight: CGFloat = 580.0
-        public static let minSettingsWindowWidth: CGFloat = 680.0
+        public static let minSettingsWindowWidth: CGFloat = 720.0
         public static let minSettingsWindowHeight: CGFloat = 460.0
         
         public static let treeRowHeight: CGFloat = 34.0
@@ -87,6 +90,16 @@ public enum AppConstants {
         public static let badgeCornerRadius: CGFloat = 4.0
         public static let appRowIconSize: CGFloat = 16.0
         public static let liveStatusAppIconSize: CGFloat = 12.0
+        
+        public static let languagePickerWidth: CGFloat = 130.0
+        public static let globalGranularityPickerWidth: CGFloat = 175.0
+        public static let rowGranularityPickerWidth: CGFloat = 135.0
+        public static let rowInputSourcePickerWidth: CGFloat = 150.0
+        public static let searchFieldWidth: CGFloat = 150.0
+        public static let searchFieldCornerRadius: CGFloat = 6.0
+        public static let emptyPlaceholderIconSize: CGFloat = 40.0
+        public static let headerIconSize: CGFloat = 20.0
+        public static let liveStatusIndicatorSize: CGFloat = 8.0
     }
     
     /// 锁定状态与徽标 UI 常量
