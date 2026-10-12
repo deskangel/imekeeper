@@ -111,6 +111,12 @@ public struct HierarchySettingsView: View {
                     Text("当前聚焦:")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    if let icon = AppIconProvider.shared.icon(for: context.bundleID) {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: AppConstants.UI.liveStatusAppIconSize, height: AppConstants.UI.liveStatusAppIconSize)
+                    }
                     Text(context.appName)
                         .font(.caption.bold())
                     Text("›")
@@ -276,9 +282,17 @@ private struct HierarchyRowView: View {
     @ViewBuilder
     private var itemIcon: some View {
         switch item.itemType {
-        case .app:
-            Image(systemName: "app.fill")
-                .foregroundColor(.blue)
+        case .app(let bundleID, _):
+            if let icon = AppIconProvider.shared.icon(for: bundleID) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: AppConstants.UI.appRowIconSize, height: AppConstants.UI.appRowIconSize)
+            } else {
+                Image(systemName: "app.fill")
+                    .foregroundColor(.blue)
+                    .frame(width: AppConstants.UI.appRowIconSize, height: AppConstants.UI.appRowIconSize)
+            }
         case .window:
             Image(systemName: "macwindow")
                 .foregroundColor(.purple)

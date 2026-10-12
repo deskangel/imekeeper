@@ -85,5 +85,7 @@ public enum AppConstants {
         public static let treeRowHeight: CGFloat = 34.0
         public static let statusItemIconSize: CGFloat = 18.0
         public static let badgeCornerRadius: CGFloat = 4.0
+        public static let appRowIconSize: CGFloat = 16.0
+        public static let liveStatusAppIconSize: CGFloat = 12.0
     }
 }
