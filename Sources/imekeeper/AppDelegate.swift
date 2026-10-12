@@ -11,6 +11,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let granularityManager = GranularityManager()
     private let profileStore = HierarchicalProfileStore()
     private let focusObserver = FocusObserver()
+    private let autoStartManager = AutoStartManager()
     
     private var settingsViewModel: HierarchySettingsViewModel!
     private var settingsWindowController: SettingsWindowController!
@@ -39,7 +40,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         self.settingsViewModel = HierarchySettingsViewModel(
             store: profileStore,
             granularityManager: granularityManager,
-            inputSourceManager: inputSourceManager
+            inputSourceManager: inputSourceManager,
+            autoStartManager: autoStartManager
         )
         
         self.settingsWindowController = SettingsWindowController(viewModel: settingsViewModel)
@@ -52,6 +54,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self = self else { return }
                 self.isEnabled.toggle()
                 self.settingsViewModel.isEnabled = self.isEnabled
+                self.updateStatusItemState()
+            },
+            onToggleAutoStart: { [weak self] in
+                guard let self = self else { return }
+                let target = !self.autoStartManager.isAutoStartEnabled
+                self.settingsViewModel.setAutoStartEnabled(target)
                 self.updateStatusItemState()
             },
             onCheckPermission: { [weak self] in
@@ -85,6 +93,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.menuBarController.refreshMenu()
                 self.updateStatusItemState()
                 self.settingsWindowController.updateTitle()
+            }
+            .store(in: &cancellables)
+            
+        // 4. 监听开机自启状态变化，同步刷新状态栏菜单勾选状态
+        settingsViewModel.$isAutoStartEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateStatusItemState()
             }
             .store(in: &cancellables)
     }
@@ -180,7 +196,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             isLocked = false
         }
-        menuBarController.updateState(isEnabled: isEnabled, currentSourceName: currentName, isLocked: isLocked)
+        menuBarController.updateState(
+            isEnabled: isEnabled,
+            currentSourceName: currentName,
+            isLocked: isLocked,
+            isAutoStartEnabled: autoStartManager.isAutoStartEnabled
+        )
     }
     
     // MARK: - Permission

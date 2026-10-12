@@ -107,6 +107,20 @@ public enum L10n {
         isChinese ? "检查辅助功能权限..." : "Check Accessibility Permission..."
     }
     
+    public static var menuAutoStart: String {
+        isChinese ? "开机自动启动" : "Launch at Login"
+    }
+    
+    public static var launchAtLoginCheckbox: String {
+        isChinese ? "开机自启动" : "Launch at Login"
+    }
+    
+    public static var launchAtLoginHelp: String {
+        isChinese
+            ? "系统登录时自动在后台启动 IME Keeper 并常驻菜单栏"
+            : "Automatically launch IME Keeper in background upon system login"
+    }
+    
     public static var menuLanguage: String {
         isChinese ? "界面语言" : "Language"
     }

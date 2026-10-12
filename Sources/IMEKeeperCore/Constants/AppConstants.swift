@@ -100,6 +100,14 @@ public enum AppConstants {
         public static let emptyPlaceholderIconSize: CGFloat = 40.0
         public static let headerIconSize: CGFloat = 20.0
         public static let liveStatusIndicatorSize: CGFloat = 8.0
+        public static let footerDividerHeight: CGFloat = 14.0
+        public static let footerSpacing: CGFloat = 16.0
+    }
+    
+    /// 系统服务与开机自启常量
+    public enum AutoStart {
+        public static let subsystem = "com.antigravity.imekeeper"
+        public static let category = "AutoStartManager"
     }
     
     /// 锁定状态与徽标 UI 常量

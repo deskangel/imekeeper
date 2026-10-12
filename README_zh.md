@@ -27,6 +27,8 @@
 - **防回环与安全模式 (Anti-Loop & Privacy Protection)**：
   - 内置防回环状态机，自动识别“程序化自动切换”与“用户快捷键手动切换”，杜绝级联事件；
   - 遇到密码输入框（`AXSecureTextField`）自动切为英文静默保护，绝不记录任何敏感上下文。
+- **开机自动启动 (Launch at Login)**：
+  - 基于 macOS 13+ 原生 `SMAppService.mainApp`，支持一键配置开机自启。可在状态栏菜单快速勾选，或在设置面板底部操作栏直观开关，无冗余后台 Helper 进程。
 - **纯菜单栏形态 (Lightweight Agent)**：
   - `LSUIElement = true` 常驻状态栏，无 Dock 栏图标打扰，内存与 CPU 占用极低。
 
@@ -39,6 +41,7 @@ imekeeper/
 ├── Package.swift
 ├── Sources/
 │   ├── IMEKeeperCore/              # 核心业务逻辑库
+│   │   ├── AutoStart/              # SMAppService 原生开机自启服务管理
 │   │   ├── Constants/              # 全局常量定义 (严格无魔法数字)
 │   │   ├── Localization/           # 本地化调度中心与中英文案字典
 │   │   ├── Models/                 # 数据模型 (FocusContext, ProfileModels, GranularityLevel)
@@ -53,7 +56,7 @@ imekeeper/
 │       └── UI/
 │           ├── MenuBar/            # 状态栏图标与下拉菜单控制器
 │           └── Settings/           # 树状大纲设置面板 (SwiftUI)
-├── Tests/IMEKeeperTests/           # 完备单元测试套件 (包含本地化测试)
+├── Tests/IMEKeeperTests/           # 完备单元测试套件 (包含本地化与自启测试)
 └── scripts/build_app.sh            # 一键 App Bundle 打包脚本
 ```
 

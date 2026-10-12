@@ -8,27 +8,37 @@ public final class MenuBarController: NSObject {
     private var statusItem: NSStatusItem?
     private let onOpenSettings: () -> Void
     private let onToggleEnabled: () -> Void
+    private let onToggleAutoStart: () -> Void
     private let onCheckPermission: () -> Void
     private var isEnabled: Bool = true
     private var isLocked: Bool = false
+    private var isAutoStartEnabled: Bool = false
     private var currentSourceName: String = "未获取"
     
     public init(
         onOpenSettings: @escaping () -> Void,
         onToggleEnabled: @escaping () -> Void,
+        onToggleAutoStart: @escaping () -> Void,
         onCheckPermission: @escaping () -> Void
     ) {
         self.onOpenSettings = onOpenSettings
         self.onToggleEnabled = onToggleEnabled
+        self.onToggleAutoStart = onToggleAutoStart
         self.onCheckPermission = onCheckPermission
         super.init()
         setupStatusItem()
     }
     
-    public func updateState(isEnabled: Bool, currentSourceName: String, isLocked: Bool = false) {
+    public func updateState(
+        isEnabled: Bool,
+        currentSourceName: String,
+        isLocked: Bool = false,
+        isAutoStartEnabled: Bool = false
+    ) {
         self.isEnabled = isEnabled
         self.currentSourceName = currentSourceName
         self.isLocked = isLocked
+        self.isAutoStartEnabled = isAutoStartEnabled
         rebuildMenu()
     }
     
@@ -86,6 +96,12 @@ public final class MenuBarController: NSObject {
         permItem.target = self
         menu.addItem(permItem)
         
+        // 开机自启动
+        let autoStartItem = NSMenuItem(title: L10n.menuAutoStart, action: #selector(handleToggleAutoStart), keyEquivalent: "")
+        autoStartItem.target = self
+        autoStartItem.state = isAutoStartEnabled ? .on : .off
+        menu.addItem(autoStartItem)
+        
         menu.addItem(NSMenuItem.separator())
         
         // 界面语言快速切换子菜单
@@ -128,6 +144,10 @@ public final class MenuBarController: NSObject {
     
     @objc private func handleCheckPermission() {
         onCheckPermission()
+    }
+    
+    @objc private func handleToggleAutoStart() {
+        onToggleAutoStart()
     }
     
     @objc private func handleQuit() {

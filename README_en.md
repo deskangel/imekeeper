@@ -27,6 +27,8 @@
 - **Anti-Loop State Machine & Privacy Shield**:
   - Built-in suppression state machine distinguishes programmatic switches from manual user shortcut triggers, preventing cascading event loops.
   - Automatically switches to ASCII input (`ABC`) for password fields (`AXSecureTextField`) and strictly refrains from logging sensitive contexts.
+- **Launch at Login (Auto Start with System)**:
+  - Built on native macOS 13+ `SMAppService.mainApp`, providing seamless one-click configuration for auto-starting at system login. Toggle directly via the status bar menu or from the settings panel footer without bloated helper daemons.
 - **Pure Menu Bar Agent**:
   - Operates as an `LSUIElement = true` status bar daemon with no Dock icon clutter, negligible memory footprint, and near-zero CPU usage.
 
@@ -39,6 +41,7 @@ imekeeper/
 ├── Package.swift
 ├── Sources/
 │   ├── IMEKeeperCore/              # Core business logic library
+│   │   ├── AutoStart/              # Native SMAppService auto-start service management
 │   │   ├── Constants/              # Global constants (Strict zero-magic-number policy)
 │   │   ├── Localization/           # Multi-language manager & bilingual dictionaries
 │   │   ├── Models/                 # Models (FocusContext, ProfileModels, GranularityLevel)
@@ -53,7 +56,7 @@ imekeeper/
 │       └── UI/
 │           ├── MenuBar/            # Menu bar item & status menu controller
 │           └── Settings/           # Hierarchical outline settings window (SwiftUI)
-├── Tests/IMEKeeperTests/           # Unit test suite (includes localization tests)
+├── Tests/IMEKeeperTests/           # Unit test suite (includes localization & auto-start tests)
 └── scripts/build_app.sh            # Automated release packaging script
 ```
 

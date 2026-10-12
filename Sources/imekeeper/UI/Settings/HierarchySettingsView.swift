@@ -244,7 +244,7 @@ public struct HierarchySettingsView: View {
     }
     
     private var bottomFooterBar: some View {
-        HStack {
+        HStack(spacing: AppConstants.UI.footerSpacing) {
             Button(role: .destructive) {
                 viewModel.clearAllHistory()
             } label: {
@@ -252,6 +252,15 @@ public struct HierarchySettingsView: View {
             }
             .buttonStyle(.borderless)
             .foregroundColor(.secondary)
+            
+            Divider().frame(height: AppConstants.UI.footerDividerHeight)
+            
+            Toggle(L10n.launchAtLoginCheckbox, isOn: Binding(
+                get: { viewModel.isAutoStartEnabled },
+                set: { viewModel.setAutoStartEnabled($0) }
+            ))
+            .toggleStyle(.checkbox)
+            .help(L10n.launchAtLoginHelp)
             
             Spacer()
             

@@ -17,21 +17,26 @@ public final class HierarchySettingsViewModel: ObservableObject {
     @Published public var currentFocusLockStatus: HierarchyItem.LockStatus = .unlocked
     @Published public var currentActiveSource: InputSourceModel?
     @Published public var isEnabled: Bool = true
+    @Published public var isAutoStartEnabled: Bool = false
     @Published public var currentLanguage: AppLanguage = LocalizationManager.shared.currentLanguage
     
     public let store: HierarchicalProfileStore
     public let granularityManager: GranularityManager
     public let inputSourceManager: InputSourceManagerProtocol
+    public let autoStartManager: AutoStartManagerProtocol
     private var cancellables = Set<AnyCancellable>()
     
     public init(
         store: HierarchicalProfileStore,
         granularityManager: GranularityManager,
-        inputSourceManager: InputSourceManagerProtocol
+        inputSourceManager: InputSourceManagerProtocol,
+        autoStartManager: AutoStartManagerProtocol = AutoStartManager()
     ) {
         self.store = store
         self.granularityManager = granularityManager
         self.inputSourceManager = inputSourceManager
+        self.autoStartManager = autoStartManager
+        self.isAutoStartEnabled = autoStartManager.isAutoStartEnabled
         self.globalGranularity = granularityManager.getGlobalDefault()
         self.availableSources = inputSourceManager.availableSources
         self.currentActiveSource = inputSourceManager.currentSource
@@ -122,5 +127,11 @@ public final class HierarchySettingsViewModel: ObservableObject {
         self.currentActiveSource = inputSourceManager.currentSource
         let gran = granularityManager.effectiveGranularity(for: context.bundleID, isBrowser: context.isBrowserApp)
         self.currentFocusLockStatus = store.lockStatus(for: context, effectiveGranularity: gran)
+    }
+    
+    /// 设置开机自启
+    public func setAutoStartEnabled(_ enabled: Bool) {
+        autoStartManager.setAutoStartEnabled(enabled)
+        self.isAutoStartEnabled = autoStartManager.isAutoStartEnabled
     }
 }
