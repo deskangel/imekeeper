@@ -27,6 +27,11 @@ cp "${BUILD_DIR}/imekeeper" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 
 cp "${PROJECT_ROOT}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 
+if [ -f "${PROJECT_ROOT}/Resources/AppIcon.icns" ]; then
+    echo "==> Packaging AppIcon.icns into Resources..."
+    cp "${PROJECT_ROOT}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+fi
+
 # 3. 搜索证书并自动代码签名
 echo "==> [3/5] Searching for code signing identities in Keychain..."
 SIGNING_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep -E "Developer ID Application|Apple Development" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' || true)

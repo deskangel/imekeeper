@@ -20,6 +20,11 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <!-- 官方应用图标 -->
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <!-- 关键属性：纯菜单栏 Agent，不显示在 Dock 栏中 -->
     <key>LSUIElement</key>
     <true/>
