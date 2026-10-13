@@ -47,4 +47,32 @@ final class AppIconProviderTests: XCTestCase {
         let afterClearLookup = provider.icon(for: finderBundleID)
         XCTAssertNotNil(afterClearLookup)
     }
+    
+    func testNegativeCachingForUnresolvedBundleID() {
+        let fakeBundleID = "com.nonexistent.fakeapp.\(UUID().uuidString)"
+        
+        // 第一次查询：解析失败并存入负缓存
+        let firstLookup = provider.icon(for: fakeBundleID)
+        XCTAssertNil(firstLookup)
+        
+        // 第二次查询：命中负缓存，直接快速返回 nil
+        let secondLookup = provider.icon(for: fakeBundleID)
+        XCTAssertNil(secondLookup)
+        
+        // 清除缓存后重试
+        provider.clearCache()
+        let afterClear = provider.icon(for: fakeBundleID)
+        XCTAssertNil(afterClear)
+    }
+    
+    func testIconThumbnailPreScaledSize() {
+        let finderBundleID = "com.apple.finder"
+        guard let icon = provider.icon(for: finderBundleID) else {
+            XCTFail("Finder 图标应能成功解析")
+            return
+        }
+        
+        XCTAssertEqual(icon.size.width, AppConstants.UI.iconThumbnailSize)
+        XCTAssertEqual(icon.size.height, AppConstants.UI.iconThumbnailSize)
+    }
 }

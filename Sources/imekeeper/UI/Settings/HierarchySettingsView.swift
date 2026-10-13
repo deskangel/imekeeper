@@ -158,9 +158,6 @@ public struct HierarchySettingsView: View {
                         item: item,
                         isSelected: viewModel.selectedItemID == item.id,
                         availableSources: viewModel.availableSources,
-                        onSelect: {
-                            viewModel.selectedItemID = item.id
-                        },
                         onUpdateSource: { newSourceID in
                             viewModel.updateSource(for: item, newSourceID: newSourceID)
                         },
@@ -174,8 +171,8 @@ public struct HierarchySettingsView: View {
                             viewModel.setGranularity(for: bundleID, level: newLevel)
                         }
                     )
+                    .equatable()
                     .tag(item.id)
-                    .id(item.id)
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -257,15 +254,20 @@ private func levelColor(for level: GranularityLevel) -> Color {
     }
 }
 
-private struct HierarchyRowView: View {
+private struct HierarchyRowView: View, Equatable {
     let item: HierarchyItem
     let isSelected: Bool
     let availableSources: [InputSourceModel]
-    let onSelect: () -> Void
     let onUpdateSource: (String) -> Void
     let onToggleLock: () -> Void
     let onDelete: () -> Void
     let onChangeGranularity: (String, GranularityLevel?) -> Void
+    
+    nonisolated static func == (lhs: HierarchyRowView, rhs: HierarchyRowView) -> Bool {
+        lhs.item == rhs.item &&
+        lhs.isSelected == rhs.isSelected &&
+        lhs.availableSources == rhs.availableSources
+    }
     
     var body: some View {
         HStack(spacing: 8) {
@@ -326,9 +328,6 @@ private struct HierarchyRowView: View {
                 .fill(isSelected ? Color.accentColor.opacity(AppConstants.UI.rowSelectionBackgroundOpacity) : Color.clear)
         )
         .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect()
-        }
     }
     
     private var isAppNode: Bool {

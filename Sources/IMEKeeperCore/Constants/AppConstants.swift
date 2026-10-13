@@ -90,6 +90,9 @@ public enum AppConstants {
         public static let badgeCornerRadius: CGFloat = 4.0
         public static let appRowIconSize: CGFloat = 16.0
         public static let liveStatusAppIconSize: CGFloat = 12.0
+        public static let iconThumbnailSize: CGFloat = 32.0
+        public static let iconBitmapBitsPerSample: Int = 8
+        public static let iconBitmapSamplesPerPixel: Int = 4
         
         public static let languagePickerWidth: CGFloat = 130.0
         public static let globalGranularityPickerWidth: CGFloat = 175.0
