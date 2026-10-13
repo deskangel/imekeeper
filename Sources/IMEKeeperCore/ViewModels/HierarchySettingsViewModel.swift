@@ -19,6 +19,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
     @Published public var isEnabled: Bool = true
     @Published public var isAutoStartEnabled: Bool = false
     @Published public var currentLanguage: AppLanguage = LocalizationManager.shared.currentLanguage
+    @Published public var selectedItemID: String?
     
     public let store: HierarchicalProfileStore
     public let granularityManager: GranularityManager
@@ -66,6 +67,12 @@ public final class HierarchySettingsViewModel: ObservableObject {
             granularityManager: granularityManager,
             searchQuery: searchQuery
         )
+        if selectedItemID == nil, let context = currentFocusContext {
+            let targetAppID = "app:\(context.bundleID)"
+            if hierarchyItems.contains(where: { $0.id == targetAppID }) {
+                self.selectedItemID = targetAppID
+            }
+        }
     }
     
     /// 刷新输入法列表
@@ -127,6 +134,11 @@ public final class HierarchySettingsViewModel: ObservableObject {
         self.currentActiveSource = inputSourceManager.currentSource
         let gran = granularityManager.effectiveGranularity(for: context.bundleID, isBrowser: context.isBrowserApp)
         self.currentFocusLockStatus = store.lockStatus(for: context, effectiveGranularity: gran)
+        
+        let targetAppID = "app:\(context.bundleID)"
+        if hierarchyItems.contains(where: { $0.id == targetAppID }) {
+            self.selectedItemID = targetAppID
+        }
     }
     
     /// 设置开机自启

@@ -95,4 +95,48 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
         try? FileManager.default.removeItem(at: storeURL)
         try? FileManager.default.removeItem(at: granURL)
     }
+    
+    @MainActor
+    func testViewModelFocusedAppSelection() {
+        let tempDir = FileManager.default.temporaryDirectory
+        let storeURL = tempDir.appendingPathComponent("vm_sel_test_store_\(UUID().uuidString).json")
+        let granURL = tempDir.appendingPathComponent("vm_sel_test_gran_\(UUID().uuidString).json")
+        
+        let store = HierarchicalProfileStore(customStorageURL: storeURL)
+        let granManager = GranularityManager(customStorageURL: granURL)
+        let mockManager = MockInputSourceManager()
+        
+        let xcodeContext = FocusContext(
+            bundleID: "com.apple.dt.Xcode",
+            appName: "Xcode",
+            windowID: "win-1",
+            windowTitle: "AppDelegate.swift"
+        )
+        store.record(context: xcodeContext, sourceID: "com.apple.keylayout.ABC", effectiveGranularity: .app)
+        
+        let wechatContext = FocusContext(
+            bundleID: "com.tencent.xinWeChat",
+            appName: "微信",
+            windowID: "win-chat",
+            windowTitle: "技术交流群"
+        )
+        store.record(context: wechatContext, sourceID: "com.apple.inputmethod.SCIM.ITABC", effectiveGranularity: .app)
+        
+        let viewModel = HierarchySettingsViewModel(
+            store: store,
+            granularityManager: granManager,
+            inputSourceManager: mockManager
+        )
+        
+        // 当切换焦点到 Xcode 时，应自动选中 app:com.apple.dt.Xcode
+        viewModel.handleFocusChanged(xcodeContext)
+        XCTAssertEqual(viewModel.selectedItemID, "app:com.apple.dt.Xcode")
+        
+        // 当切换焦点到微信时，应自动选中 app:com.tencent.xinWeChat
+        viewModel.handleFocusChanged(wechatContext)
+        XCTAssertEqual(viewModel.selectedItemID, "app:com.tencent.xinWeChat")
+        
+        try? FileManager.default.removeItem(at: storeURL)
+        try? FileManager.default.removeItem(at: granURL)
+    }
 }

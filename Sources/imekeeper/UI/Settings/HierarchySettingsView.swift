@@ -127,9 +127,6 @@ public struct HierarchySettingsView: View {
                             .foregroundColor(.accentColor)
                             .lineLimit(1)
                     }
-                    
-                    // 实时焦点锁定状态徽标
-                    liveFocusLockBadge
                 }
             }
             
@@ -153,60 +150,56 @@ public struct HierarchySettingsView: View {
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
     
-    @ViewBuilder
-    private var liveFocusLockBadge: some View {
-        switch viewModel.currentFocusLockStatus {
-        case .locked(let level):
-            HStack(spacing: 2) {
-                Image(systemName: AppConstants.LockUI.lockedIconName)
-                    .font(.system(size: AppConstants.LockUI.lockIconSize))
-                Text(level.localizedName + " " + L10n.lockActionText)
-                    .font(.system(size: AppConstants.LockUI.lockTextSize, weight: .semibold))
-            }
-            .padding(.horizontal, AppConstants.LockUI.badgePaddingHorizontal)
-            .padding(.vertical, AppConstants.LockUI.badgePaddingVertical)
-            .background(levelColor(for: level).opacity(0.15))
-            .foregroundColor(levelColor(for: level))
-            .clipShape(Capsule())
-        case .inherited(let level):
-            HStack(spacing: 2) {
-                Image(systemName: AppConstants.LockUI.lockedIconName)
-                    .font(.system(size: AppConstants.LockUI.lockIconSize))
-                Text(L10n.inheritedLockBadgePrefix + level.localizedName + " " + L10n.lockActionText)
-                    .font(.system(size: AppConstants.LockUI.lockTextSize))
-            }
-            .padding(.horizontal, AppConstants.LockUI.badgePaddingHorizontal)
-            .padding(.vertical, AppConstants.LockUI.badgePaddingVertical)
-            .background(Color.secondary.opacity(0.12))
-            .foregroundColor(.secondary)
-            .clipShape(Capsule())
-        case .unlocked:
-            EmptyView()
-        }
-    }
-    
     private var treeOutlineListView: some View {
-        List {
-            OutlineGroup(viewModel.hierarchyItems, children: \.children) { item in
-                HierarchyRowView(
-                    item: item,
-                    availableSources: viewModel.availableSources,
-                    onUpdateSource: { newSourceID in
-                        viewModel.updateSource(for: item, newSourceID: newSourceID)
-                    },
-                    onToggleLock: {
-                        viewModel.toggleLock(for: item)
-                    },
-                    onDelete: {
-                        viewModel.deleteItem(item)
-                    },
-                    onChangeGranularity: { bundleID, newLevel in
-                        viewModel.setGranularity(for: bundleID, level: newLevel)
+        ScrollViewReader { proxy in
+            List(selection: $viewModel.selectedItemID) {
+                OutlineGroup(viewModel.hierarchyItems, children: \.children) { item in
+                    HierarchyRowView(
+                        item: item,
+                        isSelected: viewModel.selectedItemID == item.id,
+                        availableSources: viewModel.availableSources,
+                        onSelect: {
+                            viewModel.selectedItemID = item.id
+                        },
+                        onUpdateSource: { newSourceID in
+                            viewModel.updateSource(for: item, newSourceID: newSourceID)
+                        },
+                        onToggleLock: {
+                            viewModel.toggleLock(for: item)
+                        },
+                        onDelete: {
+                            viewModel.deleteItem(item)
+                        },
+                        onChangeGranularity: { bundleID, newLevel in
+                            viewModel.setGranularity(for: bundleID, level: newLevel)
+                        }
+                    )
+                    .tag(item.id)
+                    .id(item.id)
+                }
+            }
+            .listStyle(.inset(alternatesRowBackgrounds: true))
+            .onChange(of: viewModel.currentFocusContext) { newContext in
+                if let bundleID = newContext?.bundleID {
+                    let targetID = "app:\(bundleID)"
+                    if viewModel.hierarchyItems.contains(where: { $0.id == targetID }) {
+                        withAnimation(.easeInOut(duration: AppConstants.UI.autoScrollAnimationDuration)) {
+                            proxy.scrollTo(targetID, anchor: .center)
+                        }
                     }
-                )
+                }
+            }
+            .onAppear {
+                if let bundleID = viewModel.currentFocusContext?.bundleID {
+                    let targetID = "app:\(bundleID)"
+                    if viewModel.hierarchyItems.contains(where: { $0.id == targetID }) {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(targetID, anchor: .center)
+                        }
+                    }
+                }
             }
         }
-        .listStyle(.inset(alternatesRowBackgrounds: true))
     }
     
     private var emptyPlaceholderView: some View {
@@ -266,7 +259,9 @@ private func levelColor(for level: GranularityLevel) -> Color {
 
 private struct HierarchyRowView: View {
     let item: HierarchyItem
+    let isSelected: Bool
     let availableSources: [InputSourceModel]
+    let onSelect: () -> Void
     let onUpdateSource: (String) -> Void
     let onToggleLock: () -> Void
     let onDelete: () -> Void
@@ -274,13 +269,22 @@ private struct HierarchyRowView: View {
     
     var body: some View {
         HStack(spacing: 8) {
+            // 选中指示条
+            RoundedRectangle(cornerRadius: AppConstants.UI.rowSelectionIndicatorCornerRadius)
+                .fill(isSelected ? Color.accentColor : Color.clear)
+                .frame(
+                    width: AppConstants.UI.rowSelectionIndicatorWidth,
+                    height: AppConstants.UI.rowSelectionIndicatorHeight
+                )
+            
             // 图标
             itemIcon
             
             // 标题与副标题
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title)
-                    .font(.system(size: 13, weight: isAppNode ? .semibold : .regular))
+                    .font(.system(size: 13, weight: (isAppNode || isSelected) ? .semibold : .regular))
+                    .foregroundColor(isSelected ? .accentColor : .primary)
                     .lineLimit(1)
                 
                 if let subtitle = item.subtitle {
@@ -315,7 +319,16 @@ private struct HierarchyRowView: View {
             .buttonStyle(.borderless)
             .help(L10n.deleteItemHelp)
         }
+        .padding(.horizontal, 4)
         .frame(height: AppConstants.UI.treeRowHeight)
+        .background(
+            RoundedRectangle(cornerRadius: AppConstants.UI.rowSelectionCornerRadius)
+                .fill(isSelected ? Color.accentColor.opacity(AppConstants.UI.rowSelectionBackgroundOpacity) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onSelect()
+        }
     }
     
     private var isAppNode: Bool {

@@ -102,6 +102,13 @@ public enum AppConstants {
         public static let liveStatusIndicatorSize: CGFloat = 8.0
         public static let footerDividerHeight: CGFloat = 14.0
         public static let footerSpacing: CGFloat = 16.0
+        
+        public static let rowSelectionCornerRadius: CGFloat = 6.0
+        public static let rowSelectionIndicatorWidth: CGFloat = 3.0
+        public static let rowSelectionIndicatorHeight: CGFloat = 16.0
+        public static let rowSelectionIndicatorCornerRadius: CGFloat = 1.5
+        public static let rowSelectionBackgroundOpacity: Double = 0.12
+        public static let autoScrollAnimationDuration: Double = 0.25
     }
     
     /// 系统服务与开机自启常量
