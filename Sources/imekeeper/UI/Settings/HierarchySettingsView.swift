@@ -49,13 +49,8 @@ public struct HierarchySettingsView: View {
                 .font(.system(size: AppConstants.UI.headerIconSize))
                 .foregroundColor(.accentColor)
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text("IME Keeper")
-                    .font(.headline)
-                Text(L10n.settingsHeaderSubtitle)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Text("IME Keeper")
+                .font(.headline)
             
             Spacer()
             
@@ -82,18 +77,6 @@ public struct HierarchySettingsView: View {
             }
             .pickerStyle(.menu)
             .frame(width: AppConstants.UI.globalGranularityPickerWidth)
-            
-            // 界面语言选择器
-            Picker(L10n.languagePickerLabel, selection: Binding(
-                get: { viewModel.currentLanguage },
-                set: { viewModel.setLanguage($0) }
-            )) {
-                ForEach(AppLanguage.allCases) { lang in
-                    Text(lang.displayName).tag(lang)
-                }
-            }
-            .pickerStyle(.menu)
-            .frame(width: AppConstants.UI.languagePickerWidth)
             
             // 全局启用开关
             Toggle("", isOn: $viewModel.isEnabled)
@@ -245,16 +228,6 @@ public struct HierarchySettingsView: View {
     
     private var bottomFooterBar: some View {
         HStack(spacing: AppConstants.UI.footerSpacing) {
-            Button(role: .destructive) {
-                viewModel.clearAllHistory()
-            } label: {
-                Label(L10n.clearAllHistory, systemImage: "trash")
-            }
-            .buttonStyle(.borderless)
-            .foregroundColor(.secondary)
-            
-            Divider().frame(height: AppConstants.UI.footerDividerHeight)
-            
             Toggle(L10n.launchAtLoginCheckbox, isOn: Binding(
                 get: { viewModel.isAutoStartEnabled },
                 set: { viewModel.setAutoStartEnabled($0) }
