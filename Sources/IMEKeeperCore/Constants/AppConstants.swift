@@ -11,6 +11,9 @@ public enum AppConstants {
         /// 程序化切换输入法后的状态抑制窗口（秒）：用于忽略系统自广播的 kTISNotifySelectedKeyboardInputSourceChanged 通知
         public static let antiLoopSuppressionTimeoutSeconds: TimeInterval = 0.45
         
+        /// 用户手动切换输入法后的保护冷静期（秒）：在此窗口期内抑制伴随焦点事件的纠偏与非输入区切英，确保手动操作最高优先级
+        public static let manualSwitchGracePeriodSeconds: TimeInterval = 0.45
+        
         /// 轮询或检查权限时的间隔（秒）
         public static let permissionCheckIntervalSeconds: TimeInterval = 1.0
     }

@@ -21,6 +21,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isEnabled: Bool = true
     private var cancellables = Set<AnyCancellable>()
     
+    /// 用户手动切换记录：用于在冷静保护期内抑制伴随焦点事件的错误纠偏与非输入区切英
+    private var lastManualSwitchTimestamp: Date?
+    private var lastManualSwitchBundleID: String?
+    private var lastManualSwitchSourceID: String?
+    
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // 设置为主体 UI 代理，确保支持无 Dock 图标常驻
         NSApp.setActivationPolicy(.accessory)
@@ -71,17 +76,29 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func setupEventPipelines() {
-        // 1. 注册系统焦点变化事件流
+        // 1. 注册系统焦点变化事件流（主线程直接同步进入 MainActor，避免 Task 额外调度延迟）
         focusObserver.startObserving { [weak self] context in
-            Task { @MainActor [weak self] in
-                self?.handleFocusChanged(context)
+            if Thread.isMainThread {
+                MainActor.assumeIsolated {
+                    self?.handleFocusChanged(context)
+                }
+            } else {
+                Task { @MainActor [weak self] in
+                    self?.handleFocusChanged(context)
+                }
             }
         }
         
-        // 2. 注册用户手动按键切换输入法事件流
+        // 2. 注册用户手动按键切换输入法事件流（主线程直接同步进入 MainActor）
         inputSourceManager.setOnUserChangedSourceHandler { [weak self] newSource in
-            Task { @MainActor [weak self] in
-                self?.handleUserManualSwitchedSource(newSource)
+            if Thread.isMainThread {
+                MainActor.assumeIsolated {
+                    self?.handleUserManualSwitchedSource(newSource)
+                }
+            } else {
+                Task { @MainActor [weak self] in
+                    self?.handleUserManualSwitchedSource(newSource)
+                }
             }
         }
         
@@ -126,8 +143,25 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
+        // 关键防回弹判定：检查是否处于该应用的手动切换保护冷静期内
+        let now = Date()
+        let isWithinManualGracePeriod: Bool
+        if let lastTime = lastManualSwitchTimestamp,
+           let lastBundle = lastManualSwitchBundleID,
+           lastBundle == context.bundleID,
+           now.timeIntervalSince(lastTime) <= AppConstants.Timing.manualSwitchGracePeriodSeconds {
+            isWithinManualGracePeriod = true
+        } else {
+            isWithinManualGracePeriod = false
+        }
+        
         // 关键前置判断：非输入框焦点行为策略判定
         if !context.isInputField {
+            // 用户在保护冷静期内刚手动切换过输入法，豁免非输入区切英，绝对尊重用户刚指定的输入法
+            if isWithinManualGracePeriod {
+                return
+            }
+            
             let policy = granularityManager.effectiveNonInputPolicy(for: context.bundleID)
             switch policy {
             case .exempt:
@@ -147,6 +181,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             for: context.bundleID,
             isBrowser: context.isBrowserApp
         )
+        
+        // 处于保护冷静期内：
+        // 若当前实际输入法与用户手动切换的目标一致，阻断时序竞态引起的旧记忆回滚；若未锁定则同步刷新偏好
+        if isWithinManualGracePeriod,
+           let manualSourceID = lastManualSwitchSourceID,
+           inputSourceManager.currentSource.id == manualSourceID {
+            if !profileStore.isContextLocked(for: context, effectiveGranularity: effectiveGranularity) {
+                profileStore.record(
+                    context: context,
+                    sourceID: manualSourceID,
+                    effectiveGranularity: effectiveGranularity
+                )
+                settingsViewModel.refreshTree()
+            }
+            return
+        }
         
         // 查询该上下文应使用的输入法偏好
         if let targetSourceID = profileStore.queryPreferredSource(for: context, effectiveGranularity: effectiveGranularity) {
@@ -181,9 +231,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
               context.bundleID != Bundle.main.bundleIdentifier,
               context.bundleID != "com.antigravity.imekeeper" else { return }
         
-        let isExemptApp = granularityManager.effectiveNonInputPolicy(for: context.bundleID) == .exempt
-        // 非输入框且非豁免应用：不将临时手动切换污染写入记忆库
-        guard context.isInputField || isExemptApp else { return }
+        // 记录用户手动切换的时间与上下文信息，开启保护冷静期
+        lastManualSwitchTimestamp = Date()
+        lastManualSwitchBundleID = context.bundleID
+        lastManualSwitchSourceID = newSource.id
         
         let effectiveGranularity = granularityManager.effectiveGranularity(
             for: context.bundleID,
@@ -195,11 +246,21 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
-        // 用户主动切换：即时更新当前层级绑定的输入法
+        // 确定记录层级：
+        // 1. 若当前在输入框内（或应用为终端豁免），按当前有效粒度完整记录
+        // 2. 若当前在非输入框内，不写入可能含随机指纹的 field 级，但降级记录到 window 级，使窗口内后续输入框能继承该偏好
+        let isExemptApp = granularityManager.effectiveNonInputPolicy(for: context.bundleID) == .exempt
+        let recordGranularity: GranularityLevel
+        if context.isInputField || isExemptApp {
+            recordGranularity = effectiveGranularity
+        } else {
+            recordGranularity = (effectiveGranularity == .field) ? .window : effectiveGranularity
+        }
+        
         profileStore.record(
             context: context,
             sourceID: newSource.id,
-            effectiveGranularity: effectiveGranularity
+            effectiveGranularity: recordGranularity
         )
         settingsViewModel.refreshTree()
     }

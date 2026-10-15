@@ -12,8 +12,14 @@ public final class CarbonInputSourceManager: @unchecked Sendable, InputSourceMan
     private var suppressedTargetSourceID: String?
     private var suppressedUntilDate: Date?
     
+    /// 最近一次向外分发（或程序化设置）的生效输入源 ID，用于严格去重
+    private var lastDispatchedSourceID: String?
+    
     public init() {
         reloadAvailableSources()
+        lock.lock()
+        lastDispatchedSourceID = currentSourceWithoutLock.id
+        lock.unlock()
         setupNotificationObserver()
     }
     
@@ -95,9 +101,10 @@ public final class CarbonInputSourceManager: @unchecked Sendable, InputSourceMan
             return false
         }
         
-        // 设置防回环抑制窗口
+        // 设置防回环抑制窗口与分发缓存
         suppressedTargetSourceID = sourceID
         suppressedUntilDate = Date().addingTimeInterval(AppConstants.Timing.antiLoopSuppressionTimeoutSeconds)
+        lastDispatchedSourceID = sourceID
         
         let status = TISSelectInputSource(targetTIS)
         return status == noErr
@@ -169,22 +176,32 @@ public final class CarbonInputSourceManager: @unchecked Sendable, InputSourceMan
         let now = Date()
         let activeSource = currentSourceWithoutLock
         
-        // 检查防回环抑制
+        // 检查防回环抑制：在抑制有效期内持续抑制目标输入法，切勿在首次收到广播时提前清空标记
         if let target = suppressedTargetSourceID,
-           let timeout = suppressedUntilDate,
-           now <= timeout {
-            if activeSource.id == target {
-                // 是我们自己程序化发起的切换，消耗并静默忽略
+           let timeout = suppressedUntilDate {
+            if now <= timeout {
+                if activeSource.id == target {
+                    // 程序化发起的切换：持续静默忽略 macOS HIToolbox 的重复广播
+                    lock.unlock()
+                    return
+                }
+            } else {
+                // 超时已过，清理过期标记
                 suppressedTargetSourceID = nil
                 suppressedUntilDate = nil
-                lock.unlock()
-                return
             }
         }
         
-        // 清理过期的抑制标记
+        // 重复广播去重：当前源与最近一次分发/设置的源相同，直接短路忽略
+        if activeSource.id == lastDispatchedSourceID {
+            lock.unlock()
+            return
+        }
+        
+        // 确认是有效的新状态变更，消费过期的抑制标记并更新最后分发记录
         suppressedTargetSourceID = nil
         suppressedUntilDate = nil
+        lastDispatchedSourceID = activeSource.id
         
         let callback = _onUserChangedSource
         lock.unlock()
