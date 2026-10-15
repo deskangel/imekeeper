@@ -486,4 +486,43 @@ final class HierarchicalProfileStoreTests: XCTestCase {
         XCTAssertNil(updatedWin.children, "窗口输入框已被清空")
         XCTAssertFalse(updatedWin.canCleanSubItems, "输入框已清空，不可再次清理")
     }
+    
+    func testCleanAllRedundantSubItemsAcrossApps() {
+        let appA = "com.apple.Terminal" // will be .app
+        let appB = "com.apple.Safari"   // will be .window
+        let appC = "com.apple.Notes"    // will be .field
+        
+        let ctxA = FocusContext(bundleID: appA, appName: "Terminal", windowID: "win-term", windowTitle: "term", fieldID: "field-term")
+        let ctxB = FocusContext(bundleID: appB, appName: "Safari", windowID: "win-safari", windowTitle: "safari", fieldID: "field-safari")
+        let ctxC = FocusContext(bundleID: appC, appName: "Notes", windowID: "win-notes", windowTitle: "notes", fieldID: "field-notes")
+        
+        store.record(context: ctxA, sourceID: "s1", effectiveGranularity: .field)
+        store.record(context: ctxB, sourceID: "s2", effectiveGranularity: .field)
+        store.record(context: ctxC, sourceID: "s3", effectiveGranularity: .field)
+        
+        granularityManager.setGranularity(for: appA, level: .app)
+        granularityManager.setGranularity(for: appB, level: .window)
+        granularityManager.setGranularity(for: appC, level: .field)
+        
+        XCTAssertTrue(store.hasAnyRedundantSubItems(granularityManager: granularityManager))
+        
+        // 全局清理所有冗余
+        store.cleanAllRedundantSubItems(granularityManager: granularityManager)
+        
+        let tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let itemA = tree.first(where: { $0.id == "app:\(appA)" })
+        let itemB = tree.first(where: { $0.id == "app:\(appB)" })
+        let itemC = tree.first(where: { $0.id == "app:\(appC)" })
+        
+        // appA (.app 粒度): 窗口和输入框全部清空
+        XCTAssertNil(itemA?.children)
+        // appB (.window 粒度): 窗口保留，但输入框清空
+        XCTAssertEqual(itemB?.children?.count, 1)
+        XCTAssertNil(itemB?.children?.first?.children)
+        // appC (.field 粒度): 窗口与输入框均完整保留
+        XCTAssertEqual(itemC?.children?.count, 1)
+        XCTAssertEqual(itemC?.children?.first?.children?.count, 1)
+        
+        XCTAssertFalse(store.hasAnyRedundantSubItems(granularityManager: granularityManager))
+    }
 }

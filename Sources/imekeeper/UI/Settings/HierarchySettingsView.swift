@@ -240,6 +240,15 @@ public struct HierarchySettingsView: View {
             
             Spacer()
             
+            Button {
+                viewModel.cleanAllRedundantSubItems()
+            } label: {
+                Label(L10n.cleanAllRedundantButton, systemImage: AppConstants.UI.cleanButtonIconName)
+            }
+            .buttonStyle(.bordered)
+            .disabled(!viewModel.hasRedundantSubItems)
+            .help(L10n.cleanAllRedundantHelp)
+            
             Button(L10n.reloadInputSources) {
                 viewModel.reloadInputSources()
             }
@@ -312,6 +321,9 @@ private struct HierarchyRowView: View, Equatable {
     let onChangeGranularity: (String, GranularityLevel?) -> Void
     let onChangeNonInputPolicy: (String, NonInputPolicy) -> Void
     
+    @State private var isCleanHovered: Bool = false
+    @State private var isDeleteHovered: Bool = false
+    
     nonisolated static func == (lhs: HierarchyRowView, rhs: HierarchyRowView) -> Bool {
         lhs.isSelected == rhs.isSelected &&
         lhs.item.id == rhs.item.id &&
@@ -373,11 +385,19 @@ private struct HierarchyRowView: View, Equatable {
                     onClean()
                 } label: {
                     Image(systemName: AppConstants.UI.cleanButtonIconName)
-                        .foregroundColor(item.canCleanSubItems ? .secondary : .secondary.opacity(AppConstants.UI.disabledCleanButtonOpacity))
                         .font(.system(size: AppConstants.UI.cleanButtonFontSize))
+                        .foregroundColor(cleanButtonForegroundColor)
+                        .frame(width: AppConstants.UI.actionButtonSize, height: AppConstants.UI.actionButtonSize)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppConstants.UI.actionButtonCornerRadius)
+                                .fill(cleanButtonHoverBackground)
+                        )
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .disabled(!item.canCleanSubItems)
+                .onHover { hovering in
+                    isCleanHovered = hovering
+                }
                 .help(cleanHelpText)
             }
             
@@ -386,10 +406,18 @@ private struct HierarchyRowView: View, Equatable {
                 onDelete()
             } label: {
                 Image(systemName: "trash")
-                    .foregroundColor(.secondary)
                     .font(.system(size: AppConstants.UI.deleteButtonFontSize))
+                    .foregroundColor(deleteButtonForegroundColor)
+                    .frame(width: AppConstants.UI.actionButtonSize, height: AppConstants.UI.actionButtonSize)
+                    .background(
+                        RoundedRectangle(cornerRadius: AppConstants.UI.actionButtonCornerRadius)
+                            .fill(deleteButtonHoverBackground)
+                    )
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                isDeleteHovered = hovering
+            }
             .help(L10n.deleteItemHelp)
         }
         .padding(.horizontal, AppConstants.UI.rowHorizontalPadding)
@@ -399,6 +427,39 @@ private struct HierarchyRowView: View, Equatable {
                 .fill(isSelected ? Color.accentColor.opacity(AppConstants.UI.rowSelectionBackgroundOpacity) : Color.clear)
         )
         .contentShape(Rectangle())
+    }
+    
+    private var cleanButtonHoverBackground: Color {
+        guard isCleanHovered && item.canCleanSubItems else { return .clear }
+        return isSelected
+            ? Color.white.opacity(AppConstants.UI.selectedRowButtonHoverBackgroundOpacity)
+            : Color.primary.opacity(AppConstants.UI.actionButtonHoverBackgroundOpacity)
+    }
+    
+    private var cleanButtonForegroundColor: Color {
+        guard item.canCleanSubItems else {
+            return isSelected
+                ? Color.white.opacity(AppConstants.UI.disabledCleanButtonOpacity)
+                : Color.secondary.opacity(AppConstants.UI.disabledCleanButtonOpacity)
+        }
+        if isCleanHovered {
+            return isSelected ? .white : Color(nsColor: .controlAccentColor)
+        }
+        return isSelected ? Color.white.opacity(0.85) : .secondary
+    }
+    
+    private var deleteButtonHoverBackground: Color {
+        guard isDeleteHovered else { return .clear }
+        return isSelected
+            ? Color.red.opacity(AppConstants.UI.selectedRowButtonHoverBackgroundOpacity)
+            : Color.red.opacity(AppConstants.UI.deleteButtonHoverBackgroundOpacity)
+    }
+    
+    private var deleteButtonForegroundColor: Color {
+        if isDeleteHovered {
+            return .red
+        }
+        return isSelected ? Color.white.opacity(0.85) : .secondary
     }
     
     private var isAppNode: Bool {
@@ -487,21 +548,18 @@ private struct HierarchyRowView: View, Equatable {
     }
     
     private var cleanHelpText: String {
-        guard item.canCleanSubItems else {
-            return L10n.noSubItemsToCleanHelp
-        }
         switch item.itemType {
         case .app(_, let granularity, _):
             switch granularity {
             case .app:
-                return L10n.cleanAppSubItemsHelp
+                return item.canCleanSubItems ? L10n.cleanAppSubItemsHelp : L10n.noSubItemsToCleanHelp
             case .window:
-                return L10n.cleanAppFieldsHelp
+                return item.canCleanSubItems ? L10n.cleanAppFieldsHelp : L10n.noSubItemsToCleanHelp
             case .field:
-                return L10n.noSubItemsToCleanHelp
+                return L10n.fieldLevelNoCleanNeededHelp
             }
         case .window:
-            return L10n.cleanWindowFieldsHelp
+            return item.canCleanSubItems ? L10n.cleanWindowFieldsHelp : L10n.noSubItemsToCleanHelp
         case .field:
             return L10n.noSubItemsToCleanHelp
         }

@@ -171,6 +171,17 @@ public final class HierarchySettingsViewModel: ObservableObject {
         refreshTree()
     }
     
+    /// 全局清理所有应用下不符合当前生效粒度的冗余下级记录
+    public func cleanAllRedundantSubItems() {
+        store.cleanAllRedundantSubItems(granularityManager: granularityManager)
+        refreshTree()
+    }
+    
+    /// 是否存在任何可全局清理的冗余记录
+    public var hasRedundantSubItems: Bool {
+        store.hasAnyRedundantSubItems(granularityManager: granularityManager)
+    }
+    
     /// 切换某一层级节点的锁定状态
     public func toggleLock(for item: HierarchyItem) {
         store.toggleLock(for: item)

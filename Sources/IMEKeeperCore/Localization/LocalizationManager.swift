@@ -215,6 +215,22 @@ public enum L10n {
         isChinese ? "无待清理的下级记录" : "No sub-items to clean"
     }
     
+    public static var fieldLevelNoCleanNeededHelp: String {
+        isChinese
+            ? "当前为输入框级粒度，所有记录均在生效中，无需清理"
+            : "Field-level granularity: all records are active, no cleanup needed"
+    }
+    
+    public static var cleanAllRedundantButton: String {
+        isChinese ? "清理冗余记录" : "Clean Redundant"
+    }
+    
+    public static var cleanAllRedundantHelp: String {
+        isChinese
+            ? "根据各应用的生效粒度，一键清理所有多余的窗口与输入框历史记录"
+            : "Clean all redundant window and field records according to each app's granularity"
+    }
+    
     public static var granularityHelp: String {
         isChinese ? "设置该应用允许生效的最大追踪粒度" : "Set the maximum effective tracking granularity for this app"
     }

@@ -212,12 +212,10 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         self.children = children
     }
     
-    /// 是否支持清理下级冗余记录动作
+    /// 是否展示清理下级冗余记录按钮（App 节点与 Window 节点常态展示，Field 节点不展示）
     public var isCleanActionAvailable: Bool {
         switch itemType {
-        case .app(_, let granularity, _):
-            return granularity == .app || granularity == .window
-        case .window:
+        case .app, .window:
             return true
         case .field:
             return false

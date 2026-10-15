@@ -392,6 +392,52 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
     }
     
+    /// 根据每个 App 当前的生效粒度，全局清理所有冗余的下级记录（.app 粒度清理其窗口与输入框，.window 粒度清理其输入框）
+    public func cleanAllRedundantSubItems(granularityManager: GranularityManager) {
+        lock.lock()
+        defer {
+            lock.unlock()
+            saveToDisk()
+        }
+        
+        for (bundleID, var app) in profiles {
+            let isBrowser = AppConstants.Browsers.knownBrowserBundleIDs.contains(bundleID)
+            let gran = granularityManager.effectiveGranularity(for: bundleID, isBrowser: isBrowser)
+            switch gran {
+            case .app:
+                app.windows.removeAll()
+                profiles[bundleID] = app
+            case .window:
+                for windowID in app.windows.keys {
+                    app.windows[windowID]?.fields.removeAll()
+                }
+                profiles[bundleID] = app
+            case .field:
+                break
+            }
+        }
+    }
+    
+    /// 检查全局是否存在任何不符合当前生效粒度的冗余下级记录
+    public func hasAnyRedundantSubItems(granularityManager: GranularityManager) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        for (bundleID, app) in profiles {
+            let isBrowser = AppConstants.Browsers.knownBrowserBundleIDs.contains(bundleID)
+            let gran = granularityManager.effectiveGranularity(for: bundleID, isBrowser: isBrowser)
+            switch gran {
+            case .app:
+                if !app.windows.isEmpty { return true }
+            case .window:
+                if app.windows.values.contains(where: { !$0.fields.isEmpty }) { return true }
+            case .field:
+                break
+            }
+        }
+        return false
+    }
+    
     // MARK: - Tree Presentation Generator
     
     private enum HierarchySortPriority {

@@ -150,8 +150,13 @@ public enum AppConstants {
         public static let menuSpacerMinLength: CGFloat = 2.0
         public static let deleteButtonFontSize: CGFloat = 11.0
         public static let cleanButtonFontSize: CGFloat = 11.0
-        public static let cleanButtonIconName: String = "broom"
+        public static let cleanButtonIconName: String = "eraser"
         public static let disabledCleanButtonOpacity: Double = 0.35
+        public static let actionButtonSize: CGFloat = 22.0
+        public static let actionButtonCornerRadius: CGFloat = 4.0
+        public static let actionButtonHoverBackgroundOpacity: Double = 0.12
+        public static let deleteButtonHoverBackgroundOpacity: Double = 0.15
+        public static let selectedRowButtonHoverBackgroundOpacity: Double = 0.22
         public static let rowTitleFontSize: CGFloat = 13.0
         public static let rowSubtitleFontSize: CGFloat = 10.0
         public static let rowContentSpacing: CGFloat = 8.0
