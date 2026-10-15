@@ -438,6 +438,31 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         return false
     }
     
+    /// 判断给定的焦点上下文在当前生效粒度下是否需要自动收录至存储结构中
+    public func shouldAutoRecordContext(_ context: FocusContext, effectiveGranularity: GranularityLevel) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        guard let appProfile = profiles[context.bundleID] else {
+            return true
+        }
+        
+        switch effectiveGranularity {
+        case .app:
+            return false
+        case .window:
+            return appProfile.windows[context.windowID] == nil
+        case .field:
+            guard let win = appProfile.windows[context.windowID] else {
+                return true
+            }
+            if context.isInputField, let fieldID = context.fieldID {
+                return win.fields[fieldID] == nil
+            }
+            return false
+        }
+    }
+    
     // MARK: - Tree Presentation Generator
     
     private enum HierarchySortPriority {

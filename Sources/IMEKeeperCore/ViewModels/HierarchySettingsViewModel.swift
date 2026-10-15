@@ -21,6 +21,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
     @Published public var isAutoStartEnabled: Bool = false
     @Published public var currentLanguage: AppLanguage = LocalizationManager.shared.currentLanguage
     @Published public var selectedItemID: String?
+    @Published public var expandedItemIDs: Set<String> = []
     
     public let store: HierarchicalProfileStore
     public let granularityManager: GranularityManager
@@ -80,10 +81,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
         AppIconProvider.shared.preloadIcons(for: appBundleIDs)
         
         if selectedItemID == nil, let context = currentFocusContext {
-            let targetAppID = "app:\(context.bundleID)"
-            if hierarchyItems.contains(where: { $0.id == targetAppID }) {
-                self.selectedItemID = targetAppID
-            }
+            locateFocusedItem(for: context)
         }
     }
     
@@ -192,17 +190,85 @@ public final class HierarchySettingsViewModel: ObservableObject {
         }
     }
     
-    /// 当焦点改变时，同步刷新状态
+    /// 判断指定层级节点是否处于展开状态
+    public func isExpanded(_ id: String) -> Bool {
+        expandedItemIDs.contains(id)
+    }
+    
+    /// 设置指定层级节点的展开状态
+    public func setExpanded(_ id: String, isExpanded: Bool) {
+        if isExpanded {
+            expandedItemIDs.insert(id)
+        } else {
+            expandedItemIDs.remove(id)
+        }
+    }
+    
+    /// 根据当前焦点上下文与生效粒度，解析出应该定位的目标节点 ID 与必须展开的祖先节点 ID 列表
+    public func resolveTargetItemID(for context: FocusContext) -> (targetID: String, ancestorIDs: [String])? {
+        let appID = "app:\(context.bundleID)"
+        guard let appItem = hierarchyItems.first(where: { $0.id == appID }) else {
+            return nil
+        }
+        
+        let effectiveGranularity = granularityManager.effectiveGranularity(
+            for: context.bundleID,
+            isBrowser: context.isBrowserApp
+        )
+        
+        switch effectiveGranularity {
+        case .app:
+            // 设定为 app 粒度时，仅定位到 App 根节点
+            return (targetID: appID, ancestorIDs: [])
+            
+        case .window:
+            let windowID = "win:\(context.bundleID):\(context.windowID)"
+            if let windowItems = appItem.children,
+               windowItems.contains(where: { $0.id == windowID }) {
+                return (targetID: windowID, ancestorIDs: [appID])
+            } else {
+                // 窗口尚未记录或不存在，平滑回退至应用级
+                return (targetID: appID, ancestorIDs: [])
+            }
+            
+        case .field:
+            let windowID = "win:\(context.bundleID):\(context.windowID)"
+            guard let windowItems = appItem.children,
+                  let windowItem = windowItems.first(where: { $0.id == windowID }) else {
+                // 窗口不存在，平滑回退至应用级
+                return (targetID: appID, ancestorIDs: [])
+            }
+            
+            if let fieldID = context.fieldID {
+                let fieldItemID = "field:\(context.bundleID):\(context.windowID):\(fieldID)"
+                if let fieldItems = windowItem.children,
+                   fieldItems.contains(where: { $0.id == fieldItemID }) {
+                    return (targetID: fieldItemID, ancestorIDs: [appID, windowID])
+                }
+            }
+            
+            // 输入框尚未记录或焦点处于非输入区，回退至所属窗口级并展开所属应用
+            return (targetID: windowID, ancestorIDs: [appID])
+        }
+    }
+    
+    /// 自动选中并展开当前聚焦元素对应的层级项
+    public func locateFocusedItem(for context: FocusContext) {
+        guard let resolved = resolveTargetItemID(for: context) else { return }
+        self.selectedItemID = resolved.targetID
+        for ancestorID in resolved.ancestorIDs {
+            self.expandedItemIDs.insert(ancestorID)
+        }
+    }
+    
+    /// 当焦点改变时，同步刷新状态并自动定位
     public func handleFocusChanged(_ context: FocusContext) {
         self.currentFocusContext = context
         self.currentActiveSource = inputSourceManager.currentSource
         let gran = granularityManager.effectiveGranularity(for: context.bundleID, isBrowser: context.isBrowserApp)
         self.currentFocusLockStatus = store.lockStatus(for: context, effectiveGranularity: gran)
         
-        let targetAppID = "app:\(context.bundleID)"
-        if hierarchyItems.contains(where: { $0.id == targetAppID }) {
-            self.selectedItemID = targetAppID
-        }
+        locateFocusedItem(for: context)
     }
     
     /// 设置开机自启

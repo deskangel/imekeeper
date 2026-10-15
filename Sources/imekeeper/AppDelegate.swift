@@ -133,13 +133,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         
         self.currentFocusContext = context
         updateStatusItemState()
-        settingsViewModel.handleFocusChanged(context)
         
-        guard isEnabled else { return }
+        guard isEnabled else {
+            settingsViewModel.handleFocusChanged(context)
+            return
+        }
         
         // 遇到密码输入框：静默保护，切为 ASCII 并不记录敏感上下文
         if context.isSecureField {
             inputSourceManager.selectSource(id: AppConstants.InputSource.defaultAsciiSourceID)
+            settingsViewModel.handleFocusChanged(context)
             return
         }
         
@@ -159,6 +162,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if !context.isInputField {
             // 用户在保护冷静期内刚手动切换过输入法，豁免非输入区切英，绝对尊重用户刚指定的输入法
             if isWithinManualGracePeriod {
+                settingsViewModel.handleFocusChanged(context)
                 return
             }
             
@@ -172,6 +176,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 if inputSourceManager.currentSource.id != AppConstants.InputSource.defaultAsciiSourceID {
                     inputSourceManager.selectSource(id: AppConstants.InputSource.defaultAsciiSourceID)
                 }
+                settingsViewModel.handleFocusChanged(context)
                 return
             }
         }
@@ -195,6 +200,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 settingsViewModel.refreshTree()
             }
+            settingsViewModel.handleFocusChanged(context)
             return
         }
         
@@ -202,6 +208,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if let targetSourceID = profileStore.queryPreferredSource(for: context, effectiveGranularity: effectiveGranularity) {
             if targetSourceID != inputSourceManager.currentSource.id {
                 inputSourceManager.selectSource(id: targetSourceID)
+            }
+            
+            // 若当前生效粒度要求追踪窗口或输入框，且当前具体层级尚未记录，则继承父级偏好并收录该节点
+            if profileStore.shouldAutoRecordContext(context, effectiveGranularity: effectiveGranularity) {
+                profileStore.record(
+                    context: context,
+                    sourceID: targetSourceID,
+                    effectiveGranularity: effectiveGranularity
+                )
+                settingsViewModel.refreshTree()
             }
         } else {
             // 初次遇见：记录当前系统现有输入法作为基准
@@ -213,6 +229,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             settingsViewModel.refreshTree()
         }
+        
+        settingsViewModel.handleFocusChanged(context)
     }
     
     private func handleUserManualSwitchedSource(_ newSource: InputSourceModel) {

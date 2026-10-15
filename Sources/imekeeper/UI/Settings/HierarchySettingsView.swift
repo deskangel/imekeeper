@@ -160,54 +160,91 @@ public struct HierarchySettingsView: View {
     private var treeOutlineListView: some View {
         ScrollViewReader { proxy in
             List(selection: $viewModel.selectedItemID) {
-                OutlineGroup(viewModel.hierarchyItems, children: \.children) { item in
-                    HierarchyRowView(
-                        item: item,
-                        isSelected: viewModel.selectedItemID == item.id,
-                        availableSources: viewModel.availableSources,
-                        onUpdateSource: { newSourceID in
-                            viewModel.updateSource(for: item, newSourceID: newSourceID)
-                        },
-                        onToggleLock: {
-                            viewModel.toggleLock(for: item)
-                        },
-                        onClean: {
-                            viewModel.cleanItem(item)
-                        },
-                        onDelete: {
-                            viewModel.deleteItem(item)
-                        },
-                        onChangeGranularity: { bundleID, newLevel in
-                            viewModel.setGranularity(for: bundleID, level: newLevel)
-                        },
-                        onChangeNonInputPolicy: { bundleID, newPolicy in
-                            viewModel.setNonInputPolicy(for: bundleID, policy: newPolicy)
+                ForEach(viewModel.hierarchyItems) { appItem in
+                    if let windowItems = appItem.children, !windowItems.isEmpty {
+                        DisclosureGroup(
+                            isExpanded: Binding(
+                                get: { viewModel.isExpanded(appItem.id) },
+                                set: { viewModel.setExpanded(appItem.id, isExpanded: $0) }
+                            )
+                        ) {
+                            ForEach(windowItems) { winItem in
+                                if let fieldItems = winItem.children, !fieldItems.isEmpty {
+                                    DisclosureGroup(
+                                        isExpanded: Binding(
+                                            get: { viewModel.isExpanded(winItem.id) },
+                                            set: { viewModel.setExpanded(winItem.id, isExpanded: $0) }
+                                        )
+                                    ) {
+                                        ForEach(fieldItems) { fieldItem in
+                                            rowView(for: fieldItem)
+                                                .tag(fieldItem.id)
+                                        }
+                                    } label: {
+                                        rowView(for: winItem)
+                                    }
+                                    .tag(winItem.id)
+                                } else {
+                                    rowView(for: winItem)
+                                        .tag(winItem.id)
+                                }
+                            }
+                        } label: {
+                            rowView(for: appItem)
                         }
-                    )
-                    .equatable()
-                    .tag(item.id)
+                        .tag(appItem.id)
+                    } else {
+                        rowView(for: appItem)
+                            .tag(appItem.id)
+                    }
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
-            .onChange(of: viewModel.currentFocusContext) { newContext in
-                if let bundleID = newContext?.bundleID {
-                    let targetID = "app:\(bundleID)"
-                    if viewModel.hierarchyItems.contains(where: { $0.id == targetID }) {
-                        withAnimation(.easeInOut(duration: AppConstants.UI.autoScrollAnimationDuration)) {
-                            proxy.scrollTo(targetID, anchor: .center)
-                        }
-                    }
-                }
+            .onChange(of: viewModel.selectedItemID) { targetID in
+                scrollToTarget(targetID, proxy: proxy)
+            }
+            .onChange(of: viewModel.currentFocusContext) { _ in
+                scrollToTarget(viewModel.selectedItemID, proxy: proxy)
             }
             .onAppear {
-                if let bundleID = viewModel.currentFocusContext?.bundleID {
-                    let targetID = "app:\(bundleID)"
-                    if viewModel.hierarchyItems.contains(where: { $0.id == targetID }) {
-                        DispatchQueue.main.async {
-                            proxy.scrollTo(targetID, anchor: .center)
-                        }
-                    }
-                }
+                scrollToTarget(viewModel.selectedItemID, proxy: proxy)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func rowView(for item: HierarchyItem) -> some View {
+        HierarchyRowView(
+            item: item,
+            isSelected: viewModel.selectedItemID == item.id,
+            availableSources: viewModel.availableSources,
+            onUpdateSource: { newSourceID in
+                viewModel.updateSource(for: item, newSourceID: newSourceID)
+            },
+            onToggleLock: {
+                viewModel.toggleLock(for: item)
+            },
+            onClean: {
+                viewModel.cleanItem(item)
+            },
+            onDelete: {
+                viewModel.deleteItem(item)
+            },
+            onChangeGranularity: { bundleID, newLevel in
+                viewModel.setGranularity(for: bundleID, level: newLevel)
+            },
+            onChangeNonInputPolicy: { bundleID, newPolicy in
+                viewModel.setNonInputPolicy(for: bundleID, policy: newPolicy)
+            }
+        )
+        .equatable()
+    }
+    
+    private func scrollToTarget(_ targetID: String?, proxy: ScrollViewProxy) {
+        guard let targetID = targetID else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + AppConstants.UI.autoScrollDelay) {
+            withAnimation(.easeInOut(duration: AppConstants.UI.autoScrollAnimationDuration)) {
+                proxy.scrollTo(targetID, anchor: .center)
             }
         }
     }

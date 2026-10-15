@@ -104,6 +104,7 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
         
         let store = HierarchicalProfileStore(customStorageURL: storeURL)
         let granManager = GranularityManager(customStorageURL: granURL)
+        granManager.setGlobalDefault(.app)
         let mockManager = MockInputSourceManager()
         
         let xcodeContext = FocusContext(
@@ -135,6 +136,86 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
         // 当切换焦点到微信时，应自动选中 app:com.tencent.xinWeChat
         viewModel.handleFocusChanged(wechatContext)
         XCTAssertEqual(viewModel.selectedItemID, "app:com.tencent.xinWeChat")
+        
+        try? FileManager.default.removeItem(at: storeURL)
+        try? FileManager.default.removeItem(at: granURL)
+    }
+    
+    @MainActor
+    func testViewModelGranularityBasedFocusLocation() {
+        let tempDir = FileManager.default.temporaryDirectory
+        let storeURL = tempDir.appendingPathComponent("vm_gran_loc_store_\(UUID().uuidString).json")
+        let granURL = tempDir.appendingPathComponent("vm_gran_loc_gran_\(UUID().uuidString).json")
+        
+        let store = HierarchicalProfileStore(customStorageURL: storeURL)
+        let granManager = GranularityManager(customStorageURL: granURL)
+        let mockManager = MockInputSourceManager()
+        
+        // 准备一个包含 Window 和 Field 的数据结构
+        let contextField = FocusContext(
+            bundleID: "com.apple.dt.Xcode",
+            appName: "Xcode",
+            windowID: "win-main",
+            windowTitle: "Main.swift",
+            fieldID: "field-editor",
+            fieldDescription: "Editor",
+            role: "AXTextArea"
+        )
+        store.record(context: contextField, sourceID: "com.apple.keylayout.ABC", effectiveGranularity: .field)
+        
+        let viewModel = HierarchySettingsViewModel(
+            store: store,
+            granularityManager: granManager,
+            inputSourceManager: mockManager
+        )
+        
+        let appID = "app:com.apple.dt.Xcode"
+        let winID = "win:com.apple.dt.Xcode:win-main"
+        let fieldID = "field:com.apple.dt.Xcode:win-main:field-editor"
+        
+        // 1. 当粒度设为 .app 时，仅定位到 app 节点，不展开任何子项
+        granManager.setGranularity(for: "com.apple.dt.Xcode", level: .app)
+        viewModel.handleFocusChanged(contextField)
+        XCTAssertEqual(viewModel.selectedItemID, appID)
+        XCTAssertFalse(viewModel.isExpanded(appID))
+        XCTAssertFalse(viewModel.isExpanded(winID))
+        
+        // 2. 当粒度设为 .window 时，定位到 window 节点，并自动展开父级 app
+        granManager.setGranularity(for: "com.apple.dt.Xcode", level: .window)
+        viewModel.handleFocusChanged(contextField)
+        XCTAssertEqual(viewModel.selectedItemID, winID)
+        XCTAssertTrue(viewModel.isExpanded(appID))
+        XCTAssertFalse(viewModel.isExpanded(winID))
+        
+        // 3. 当粒度设为 .field 时，定位到具体的 field 节点，并同时展开所属 app 与所属 window
+        granManager.setGranularity(for: "com.apple.dt.Xcode", level: .field)
+        viewModel.handleFocusChanged(contextField)
+        XCTAssertEqual(viewModel.selectedItemID, fieldID)
+        XCTAssertTrue(viewModel.isExpanded(appID))
+        XCTAssertTrue(viewModel.isExpanded(winID))
+        
+        // 4. 当处于 .field 粒度但遇到未记录的输入框或非输入区时，平滑回退至窗口级并展开 app
+        let nonFieldContext = FocusContext(
+            bundleID: "com.apple.dt.Xcode",
+            appName: "Xcode",
+            windowID: "win-main",
+            windowTitle: "Main.swift",
+            fieldID: "unrecorded-field",
+            isInputField: false
+        )
+        viewModel.handleFocusChanged(nonFieldContext)
+        XCTAssertEqual(viewModel.selectedItemID, winID)
+        XCTAssertTrue(viewModel.isExpanded(appID))
+        
+        // 5. 当遇到完全未记录的窗口时，平滑回退至 app 级
+        let unrecordedWinContext = FocusContext(
+            bundleID: "com.apple.dt.Xcode",
+            appName: "Xcode",
+            windowID: "unknown-win",
+            windowTitle: "Unknown"
+        )
+        viewModel.handleFocusChanged(unrecordedWinContext)
+        XCTAssertEqual(viewModel.selectedItemID, appID)
         
         try? FileManager.default.removeItem(at: storeURL)
         try? FileManager.default.removeItem(at: granURL)

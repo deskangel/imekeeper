@@ -136,6 +136,7 @@ public enum AppConstants {
         public static let rowSelectionIndicatorCornerRadius: CGFloat = 1.5
         public static let rowSelectionBackgroundOpacity: Double = 0.12
         public static let autoScrollAnimationDuration: Double = 0.25
+        public static let autoScrollDelay: TimeInterval = 0.05
         
         // 行内轻量级下拉菜单与排版常量
         public static let menuControlHeight: CGFloat = 22.0
