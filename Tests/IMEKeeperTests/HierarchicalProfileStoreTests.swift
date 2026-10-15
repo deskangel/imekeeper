@@ -462,4 +462,116 @@ final class HierarchicalProfileStoreTests: XCTestCase {
         XCTAssertFalse(savedJSONString.contains("\"windows\""), "重新保存后必须彻底清理 windows 层级，不留旧字段")
         XCTAssertTrue(savedJSONString.contains("\"fields\""), "必须采用纯净的 fields 字典")
     }
+    
+    func testRenameFieldProfileAndPersistence() throws {
+        let appBundleID = "com.antigravity.test.rename"
+        let fieldID = "abcdef1234567890"
+        let context = FocusContext(
+            bundleID: appBundleID,
+            appName: "RenameApp",
+            windowID: "win-rename",
+            windowTitle: "MainWindow",
+            fieldID: fieldID,
+            fieldDescription: "Original Name",
+            role: "AXTextField"
+        )
+        
+        // 1. 初次记录
+        store.record(context: context, sourceID: "com.apple.keylayout.US", effectiveGranularity: .field)
+        
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let originalFieldItem = tree.first?.children?.first(where: { $0.id == "field:\(appBundleID):\(fieldID)" })
+        XCTAssertEqual(originalFieldItem?.title, "Original Name")
+        XCTAssertEqual(originalFieldItem?.hashSubtitle, L10n.fieldHashSubtitle(hashPrefix: "abcdef12"))
+        
+        // 2. 重命名
+        store.renameField(bundleID: appBundleID, fieldID: fieldID, newName: "Custom Renamed Title")
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let renamedFieldItem = tree.first?.children?.first(where: { $0.id == "field:\(appBundleID):\(fieldID)" })
+        XCTAssertEqual(renamedFieldItem?.title, "Custom Renamed Title")
+        XCTAssertEqual(renamedFieldItem?.hashSubtitle, L10n.fieldHashSubtitle(hashPrefix: "abcdef12"))
+        
+        // 3. 再次获取焦点并 record，验证自定义名称不被原始探测名冲掉
+        store.record(context: context, sourceID: "com.apple.keylayout.US", effectiveGranularity: .field)
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let preservedFieldItem = tree.first?.children?.first(where: { $0.id == "field:\(appBundleID):\(fieldID)" })
+        XCTAssertEqual(preservedFieldItem?.title, "Custom Renamed Title", "再次聚焦录入不应冲掉用户自定义重命名")
+        
+        // 4. 从磁盘重新加载验证持久化
+        let reloadedStore = HierarchicalProfileStore(customStorageURL: tempURL)
+        let reloadedTree = reloadedStore.buildHierarchyItems(granularityManager: granularityManager)
+        let persistedFieldItem = reloadedTree.first?.children?.first(where: { $0.id == "field:\(appBundleID):\(fieldID)" })
+        XCTAssertEqual(persistedFieldItem?.title, "Custom Renamed Title", "重命名在持久化重载后必须完整保留")
+    }
+    
+    func testLockedAppDoesNotAddNewFieldsAtFieldGranularity() {
+        let appBundleID = "com.microsoft.VSCode"
+        let terminalFieldID = "vscode-terminal-input"
+        let newSearchFieldID = "vscode-search-widget"
+        let defaultAppSource = "com.apple.keylayout.ABC"
+        let terminalSource = "com.apple.keylayout.US"
+        
+        let ctxTerminal = FocusContext(
+            bundleID: appBundleID,
+            appName: "Code",
+            windowID: "win-workspace",
+            windowTitle: "Workspace",
+            fieldID: terminalFieldID,
+            fieldDescription: "终端输入区",
+            role: "AXTextField",
+            isInputField: true
+        )
+        
+        let ctxNewSearch = FocusContext(
+            bundleID: appBundleID,
+            appName: "Code",
+            windowID: "win-workspace",
+            windowTitle: "Workspace",
+            fieldID: newSearchFieldID,
+            fieldDescription: "全局搜索框",
+            role: "AXSearchField",
+            isInputField: true
+        )
+        
+        // 1. 初次记录常用输入框（例如终端）并锁定该输入框
+        store.record(context: ctxTerminal, sourceID: terminalSource, effectiveGranularity: .field)
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let appItem = tree.first,
+              let terminalItem = appItem.children?.first(where: { $0.id == "field:\(appBundleID):\(terminalFieldID)" }) else {
+            XCTFail("应当成功构造大纲树")
+            return
+        }
+        store.toggleLock(for: terminalItem)
+        
+        // 2. 将应用设置为锁定状态
+        store.toggleLock(for: appItem)
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        XCTAssertEqual(tree.first?.lockStatus, .locked(level: .app), "应用必须处于锁定状态")
+        
+        // 3. 验证当应用被锁定后，新输入框在 field 粒度下绝不自动收录
+        let shouldAutoRecord = store.shouldAutoRecordContext(ctxNewSearch, effectiveGranularity: .field)
+        XCTAssertFalse(shouldAutoRecord, "App 锁定后，处于 field 粒度也不再自动收录新 field，防止记录暴涨")
+        
+        // 4. 尝试执行 record 录入新输入框，验证其不会被添加到 fields 集合中
+        store.record(context: ctxNewSearch, sourceID: "com.apple.inputmethod.SCIM.ITABC", effectiveGranularity: .field)
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let updatedAppItem = tree.first
+        XCTAssertEqual(updatedAppItem?.children?.count, 1, "App 锁定后，新输入框绝不被添加进 fields 字典中")
+        XCTAssertEqual(updatedAppItem?.children?.first?.id, "field:\(appBundleID):\(terminalFieldID)")
+        
+        // 5. 验证新输入框平稳降级使用 App 的基准偏好输入法，已有输入框不受影响
+        let newFieldPreferred = store.queryPreferredSource(for: ctxNewSearch, effectiveGranularity: .field)
+        XCTAssertEqual(newFieldPreferred, terminalSource, "未收录的新输入框降级使用应用基准输入法")
+        let terminalPreferred = store.queryPreferredSource(for: ctxTerminal, effectiveGranularity: .field)
+        XCTAssertEqual(terminalPreferred, terminalSource, "已有锁定的常用输入框偏好完好保留")
+        
+        // 6. 解锁应用后，新输入框恢复正常自动收录与创建能力
+        store.toggleLock(for: updatedAppItem!)
+        let shouldAutoRecordAfterUnlock = store.shouldAutoRecordContext(ctxNewSearch, effectiveGranularity: .field)
+        XCTAssertTrue(shouldAutoRecordAfterUnlock, "应用解锁后，新输入框恢复允许自动收录")
+        store.record(context: ctxNewSearch, sourceID: "com.apple.inputmethod.SCIM.ITABC", effectiveGranularity: .field)
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        XCTAssertEqual(tree.first?.children?.count, 2, "应用解锁后，新输入框能够正常记录")
+    }
 }

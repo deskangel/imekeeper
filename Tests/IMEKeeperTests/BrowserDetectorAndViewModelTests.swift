@@ -251,4 +251,91 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
         viewModel.setGranularity(for: appBundleID, level: .app)
         XCTAssertFalse(viewModel.isExpanded(appNodeID))
     }
+    
+    @MainActor
+    func testPreferencesAppLockDoesNotSortImmediatelyUntilReopened() {
+        let tempDir = FileManager.default.temporaryDirectory
+        let storeURL = tempDir.appendingPathComponent("vm_test_lock_sort_\(UUID().uuidString).json")
+        let granURL = tempDir.appendingPathComponent("vm_test_gran_sort_\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: storeURL)
+            try? FileManager.default.removeItem(at: granURL)
+        }
+        
+        let store = HierarchicalProfileStore(customStorageURL: storeURL)
+        let granManager = GranularityManager(customStorageURL: granURL)
+        let mockManager = MockInputSourceManager()
+        
+        let appA = "com.test.Alpha"
+        let appB = "com.test.Beta"
+        let appZ = "com.test.Zulu"
+        
+        let ctxA = FocusContext(bundleID: appA, appName: "Alpha", windowID: "win-a", windowTitle: "Win A")
+        let ctxB = FocusContext(bundleID: appB, appName: "Beta", windowID: "win-b", windowTitle: "Win B")
+        let ctxZ = FocusContext(bundleID: appZ, appName: "Zulu", windowID: "win-z", windowTitle: "Win Z")
+        
+        store.record(context: ctxA, sourceID: "s1", effectiveGranularity: .app)
+        store.record(context: ctxB, sourceID: "s2", effectiveGranularity: .app)
+        store.record(context: ctxZ, sourceID: "s3", effectiveGranularity: .app)
+        
+        let viewModel = HierarchySettingsViewModel(
+            store: store,
+            granularityManager: granManager,
+            inputSourceManager: mockManager
+        )
+        
+        // 初始状态：未锁定，按字母顺序排列
+        XCTAssertEqual(viewModel.hierarchyItems.map(\.title), ["Alpha", "Beta", "Zulu"])
+        
+        guard let zuluItem = viewModel.hierarchyItems.first(where: { $0.title == "Zulu" }) else {
+            XCTFail("未找到 Zulu 节点")
+            return
+        }
+        
+        // 1. 在偏好设置中锁定 Zulu：要求不立刻重排序，保持视觉位置在原处
+        viewModel.toggleLock(for: zuluItem)
+        
+        let updatedZulu = viewModel.hierarchyItems.first(where: { $0.title == "Zulu" })
+        XCTAssertEqual(updatedZulu?.isLocked, true)
+        XCTAssertEqual(updatedZulu?.lockStatus, .locked(level: .app))
+        // 顺序应当保持不变，Zulu 依然在最后
+        XCTAssertEqual(
+            viewModel.hierarchyItems.map(\.title),
+            ["Alpha", "Beta", "Zulu"],
+            "锁定 App 时不能立刻触发排序，必须保持当前列表顺序稳定"
+        )
+        
+        // 2. 模拟重新打开 preferences：此时才触发排序，已锁定的 Zulu 置顶
+        viewModel.openPreferences()
+        XCTAssertEqual(
+            viewModel.hierarchyItems.map(\.title),
+            ["Zulu", "Alpha", "Beta"],
+            "重新打开偏好设置时必须执行排序，将已锁定的 App 排在最前面"
+        )
+        
+        // 3. 在偏好设置中解锁 Zulu：同样不能立刻重排序
+        guard let lockedZulu = viewModel.hierarchyItems.first(where: { $0.title == "Zulu" }) else {
+            XCTFail("未找到置顶的 Zulu 节点")
+            return
+        }
+        viewModel.toggleLock(for: lockedZulu)
+        
+        let unlockedZulu = viewModel.hierarchyItems.first(where: { $0.title == "Zulu" })
+        XCTAssertEqual(unlockedZulu?.isLocked, false)
+        XCTAssertEqual(unlockedZulu?.lockStatus, .unlocked)
+        // 顺序应当保持不变，未重排前 Zulu 依然在最前面
+        XCTAssertEqual(
+            viewModel.hierarchyItems.map(\.title),
+            ["Zulu", "Alpha", "Beta"],
+            "解锁 App 时不能立刻触发排序，必须保持当前列表顺序稳定"
+        )
+        
+        // 4. 再次打开 preferences 时触发排序，恢复字母顺序
+        viewModel.openPreferences()
+        XCTAssertEqual(
+            viewModel.hierarchyItems.map(\.title),
+            ["Alpha", "Beta", "Zulu"],
+            "重新打开偏好设置时执行排序，恢复未锁定的字母排序"
+        )
+    }
 }

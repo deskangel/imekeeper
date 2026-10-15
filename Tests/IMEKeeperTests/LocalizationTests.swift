@@ -62,6 +62,8 @@ final class LocalizationTests: XCTestCase {
             XCTAssertEqual(GranularityLevel.field.localizedName, "Field Level (Field)")
             
             XCTAssertEqual(L10n.fieldRoleSubtitle(role: "AXTextField"), "Role: AXTextField")
+            XCTAssertEqual(L10n.fieldHashSubtitle(hashPrefix: "a1b2c3d4"), "Hash: a1b2c3d4")
+            XCTAssertEqual(L10n.doubleClickToRenameHelp, "Double-click to rename field")
             
             exp.fulfill()
         }
@@ -83,6 +85,8 @@ final class LocalizationTests: XCTestCase {
             XCTAssertEqual(GranularityLevel.field.localizedName, "输入框级 (Field)")
             
             XCTAssertEqual(L10n.fieldRoleSubtitle(role: "AXTextField"), "角色: AXTextField")
+            XCTAssertEqual(L10n.fieldHashSubtitle(hashPrefix: "a1b2c3d4"), "哈希: a1b2c3d4")
+            XCTAssertEqual(L10n.doubleClickToRenameHelp, "双击以重命名输入框")
             
             exp.fulfill()
         }

@@ -160,21 +160,25 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
         
         if effectiveGranularity == .field, context.isInputField, let fieldID = context.fieldID {
-            let fieldIdentifier = context.fieldDescription ?? context.role ?? AppConstants.Accessibility.unknownFieldIdentifier
-            // 检查输入框是否为新创建：新创建的输入框继承上级 App 当前指定的输入法设置
-            var fieldProfile = appProfile.fields[fieldID] ?? FieldProfile(
-                id: fieldID,
-                fieldIdentifier: fieldIdentifier,
-                role: context.role ?? AppConstants.Accessibility.textFieldRole,
-                sourceID: appProfile.lastSourceID
-            )
-            // 仅在输入框未锁定且未继承应用锁定时更新输入框的输入法
-            if !fieldProfile.isLocked && !appProfile.isLocked {
-                fieldProfile.sourceID = sourceID
-                fieldProfile.fieldIdentifier = fieldIdentifier
-                fieldProfile.lastUpdated = Date()
+            // 当 App 自身已被锁定时，不再向该应用新增任何输入框记录（避免在浏览器、IDE 等场景下偏好和记录无限暴涨）
+            if appProfile.isLocked && appProfile.fields[fieldID] == nil {
+                // 跳过新增 field
+            } else {
+                let fieldIdentifier = context.fieldDescription ?? context.role ?? AppConstants.Accessibility.unknownFieldIdentifier
+                // 检查输入框是否为新创建：新创建的输入框继承上级 App 当前指定的输入法设置
+                var fieldProfile = appProfile.fields[fieldID] ?? FieldProfile(
+                    id: fieldID,
+                    fieldIdentifier: fieldIdentifier,
+                    role: context.role ?? AppConstants.Accessibility.textFieldRole,
+                    sourceID: appProfile.lastSourceID
+                )
+                // 仅在输入框未锁定且未继承应用锁定时更新输入框的输入法（保留已有的自定义名称，避免被覆盖）
+                if !fieldProfile.isLocked && !appProfile.isLocked {
+                    fieldProfile.sourceID = sourceID
+                    fieldProfile.lastUpdated = Date()
+                }
+                appProfile.fields[fieldID] = fieldProfile
             }
-            appProfile.fields[fieldID] = fieldProfile
         }
         
         profiles[context.bundleID] = appProfile
@@ -184,6 +188,25 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
     }
     
     // MARK: - Node Modification for Settings UI
+    
+    /// 重命名指定输入框的显示标题/标识
+    public func renameField(bundleID: String, fieldID: String, newName: String) {
+        lock.lock()
+        defer {
+            lock.unlock()
+            saveToDisk()
+        }
+        
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        if var app = profiles[bundleID], var field = app.fields[fieldID] {
+            field.fieldIdentifier = trimmed
+            field.lastUpdated = Date()
+            app.fields[fieldID] = field
+            profiles[bundleID] = app
+        }
+    }
     
     public func updateSource(for item: HierarchyItem, newSourceID: String) {
         lock.lock()
@@ -319,6 +342,10 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         case .app:
             return false
         case .field:
+            // 当 App 已被锁定时，不主动收录新发现的输入框节点
+            if appProfile.isLocked {
+                return false
+            }
             if context.isInputField, let fieldID = context.fieldID {
                 return appProfile.fields[fieldID] == nil
             }
@@ -334,10 +361,11 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         static let unlocked = 2
     }
     
-    /// 将存储的扁平结构构造为适用于 OutlineGroup 渲染的树状项列表（锁定的项目置顶显示）
+    /// 将存储的扁平结构构造为适用于 OutlineGroup 渲染的树状项列表（锁定的项目置顶显示，或遵循外部指定的显示顺序）
     public func buildHierarchyItems(
         granularityManager: GranularityManager,
-        searchQuery: String? = nil
+        searchQuery: String? = nil,
+        customAppOrder: [String]? = nil
     ) -> [HierarchyItem] {
         lock.lock()
         defer { lock.unlock() }
@@ -345,14 +373,27 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         var result: [HierarchyItem] = []
         let query = searchQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         
-        // 应用程序排序：直接锁定的应用排在最前面，包含锁定输入框的应用居中，未锁定的排最后；同优先级按应用名字母排序
-        let sortedApps = profiles.values.sorted { lhs, rhs in
-            let lhsPriority = lhs.isLocked ? HierarchySortPriority.directlyLocked : (lhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
-            let rhsPriority = rhs.isLocked ? HierarchySortPriority.directlyLocked : (rhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
-            if lhsPriority != rhsPriority {
-                return lhsPriority < rhsPriority
+        // 应用程序排序：若指定了已有显示顺序，则保持当前视觉顺序稳定；否则执行完整排序（锁定项置顶，同级按名称字母升序）
+        let sortedApps: [AppProfile]
+        if let customAppOrder = customAppOrder {
+            let orderMap = Dictionary(uniqueKeysWithValues: customAppOrder.enumerated().map { ($0.element, $0.offset) })
+            sortedApps = profiles.values.sorted { lhs, rhs in
+                let lhsIndex = orderMap[lhs.id] ?? Int.max
+                let rhsIndex = orderMap[rhs.id] ?? Int.max
+                if lhsIndex != rhsIndex {
+                    return lhsIndex < rhsIndex
+                }
+                return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
             }
-            return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
+        } else {
+            sortedApps = profiles.values.sorted { lhs, rhs in
+                let lhsPriority = lhs.isLocked ? HierarchySortPriority.directlyLocked : (lhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
+                let rhsPriority = rhs.isLocked ? HierarchySortPriority.directlyLocked : (rhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
+                if lhsPriority != rhsPriority {
+                    return lhsPriority < rhsPriority
+                }
+                return lhs.appName.localizedStandardCompare(rhs.appName) == .orderedAscending
+            }
         }
         
         for app in sortedApps {
@@ -381,10 +422,12 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                     fieldLockStatus = .unlocked
                 }
                 
+                let hashPrefix = String(field.id.prefix(AppConstants.UI.fieldHashDisplayLength))
                 let fieldItem = HierarchyItem(
                     id: "field:\(app.id):\(field.id)",
                     title: field.fieldIdentifier.isEmpty ? field.role : field.fieldIdentifier,
                     subtitle: L10n.fieldRoleSubtitle(role: field.role),
+                    hashSubtitle: L10n.fieldHashSubtitle(hashPrefix: hashPrefix),
                     itemType: .field(bundleID: app.id, fieldID: field.id),
                     currentSourceID: field.sourceID,
                     isLocked: field.isLocked,

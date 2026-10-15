@@ -20,6 +20,8 @@ public final class SettingsWindowController {
     
     /// 显示设置窗口并激活至最前
     public func showWindow() {
+        viewModel.openPreferences()
+        
         if let existing = window {
             existing.title = L10n.settingsWindowTitle
             existing.level = .floating

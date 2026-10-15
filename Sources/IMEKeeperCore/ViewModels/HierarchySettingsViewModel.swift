@@ -28,6 +28,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
     public let inputSourceManager: InputSourceManagerProtocol
     public let autoStartManager: AutoStartManagerProtocol
     private var cancellables = Set<AnyCancellable>()
+    private var appDisplayOrder: [String]?
     
     public init(
         store: HierarchicalProfileStore,
@@ -56,7 +57,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        refreshTree()
+        openPreferences()
     }
     
     /// 设置应用程序语言
@@ -64,11 +65,22 @@ public final class HierarchySettingsViewModel: ObservableObject {
         LocalizationManager.shared.setLanguage(language)
     }
     
+    /// 打开偏好设置时调用：触发全量排序并稳定记录当前大纲显示顺序
+    public func openPreferences() {
+        self.appDisplayOrder = nil
+        refreshTree(sorting: true)
+    }
+    
     /// 刷新整棵大纲树
-    public func refreshTree() {
+    /// - Parameter sorting: 是否重新按照锁定权重全局排序。若为 false 则维持当前大纲视觉顺序
+    public func refreshTree(sorting: Bool = false) {
+        if sorting {
+            self.appDisplayOrder = nil
+        }
         self.hierarchyItems = store.buildHierarchyItems(
             granularityManager: granularityManager,
-            searchQuery: searchQuery
+            searchQuery: searchQuery,
+            customAppOrder: appDisplayOrder
         )
         
         // 预热所有包含的应用图标至内存缓存，避免在列表滚动时触发主线程磁盘 I/O 或系统 IPC
@@ -78,6 +90,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
             }
             return nil
         }
+        self.appDisplayOrder = appBundleIDs
         AppIconProvider.shared.preloadIcons(for: appBundleIDs)
         
         if selectedItemID == nil, let context = currentFocusContext {
@@ -95,6 +108,13 @@ public final class HierarchySettingsViewModel: ObservableObject {
     /// 更新某一层级项绑定的输入法
     public func updateSource(for item: HierarchyItem, newSourceID: String) {
         store.updateSource(for: item, newSourceID: newSourceID)
+        refreshTree()
+    }
+    
+    /// 重命名输入框显示标识/名称
+    public func renameField(item: HierarchyItem, newName: String) {
+        guard case .field(let bundleID, let fieldID) = item.itemType else { return }
+        store.renameField(bundleID: bundleID, fieldID: fieldID, newName: newName)
         refreshTree()
     }
     
@@ -177,13 +197,60 @@ public final class HierarchySettingsViewModel: ObservableObject {
         store.hasAnyRedundantSubItems(granularityManager: granularityManager)
     }
     
-    /// 切换某一层级节点的锁定状态
+    /// 切换某一层级节点的锁定状态（就地更新节点状态，不立刻触发列表重排序，保持视觉位置稳定）
     public func toggleLock(for item: HierarchyItem) {
         store.toggleLock(for: item)
-        refreshTree()
+        updateLockStatusInPlace(for: item)
         if let context = currentFocusContext {
             let gran = granularityManager.effectiveGranularity(for: context.bundleID, isBrowser: context.isBrowserApp)
             self.currentFocusLockStatus = store.lockStatus(for: context, effectiveGranularity: gran)
+        }
+    }
+    
+    /// 在不重新排序的情况下就地刷新层级项的锁定状态
+    private func updateLockStatusInPlace(for item: HierarchyItem) {
+        switch item.itemType {
+        case .app(let bundleID, _, _):
+            let appID = "app:\(bundleID)"
+            guard let appIndex = hierarchyItems.firstIndex(where: { $0.id == appID }) else { return }
+            var appItem = hierarchyItems[appIndex]
+            appItem.isLocked.toggle()
+            appItem.lockStatus = appItem.isLocked ? .locked(level: .app) : .unlocked
+            
+            // 同步联动该 App 下各输入框的继承保护状态
+            if var children = appItem.children {
+                for i in 0..<children.count {
+                    if children[i].isLocked {
+                        children[i].lockStatus = .locked(level: .field)
+                    } else if appItem.isLocked {
+                        children[i].lockStatus = .inherited(from: .app)
+                    } else {
+                        children[i].lockStatus = .unlocked
+                    }
+                }
+                appItem.children = children
+            }
+            hierarchyItems[appIndex] = appItem
+            
+        case .field(let bundleID, _):
+            let appID = "app:\(bundleID)"
+            guard let appIndex = hierarchyItems.firstIndex(where: { $0.id == appID }) else { return }
+            var appItem = hierarchyItems[appIndex]
+            guard var children = appItem.children,
+                  let fieldIndex = children.firstIndex(where: { $0.id == item.id }) else { return }
+            
+            var fieldItem = children[fieldIndex]
+            fieldItem.isLocked.toggle()
+            if fieldItem.isLocked {
+                fieldItem.lockStatus = .locked(level: .field)
+            } else if appItem.isLocked {
+                fieldItem.lockStatus = .inherited(from: .app)
+            } else {
+                fieldItem.lockStatus = .unlocked
+            }
+            children[fieldIndex] = fieldItem
+            appItem.children = children
+            hierarchyItems[appIndex] = appItem
         }
     }
     

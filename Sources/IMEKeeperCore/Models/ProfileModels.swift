@@ -160,6 +160,7 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
     public let id: String
     public let title: String
     public let subtitle: String?
+    public let hashSubtitle: String?
     public let itemType: ItemType
     public var currentSourceID: String
     public var isLocked: Bool
@@ -170,6 +171,7 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         id: String,
         title: String,
         subtitle: String? = nil,
+        hashSubtitle: String? = nil,
         itemType: ItemType,
         currentSourceID: String,
         isLocked: Bool = false,
@@ -179,6 +181,7 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         self.id = id
         self.title = title
         self.subtitle = subtitle
+        self.hashSubtitle = hashSubtitle
         self.itemType = itemType
         self.currentSourceID = currentSourceID
         self.isLocked = isLocked

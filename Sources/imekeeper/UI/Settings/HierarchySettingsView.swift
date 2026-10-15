@@ -207,6 +207,7 @@ public struct HierarchySettingsView: View {
                 scrollToTarget(viewModel.selectedItemID, proxy: proxy)
             }
             .onAppear {
+                viewModel.openPreferences()
                 scrollToTarget(viewModel.selectedItemID, proxy: proxy)
             }
         }
@@ -235,6 +236,9 @@ public struct HierarchySettingsView: View {
             },
             onChangeNonInputPolicy: { bundleID, newPolicy in
                 viewModel.setNonInputPolicy(for: bundleID, policy: newPolicy)
+            },
+            onRenameField: { newName in
+                viewModel.renameField(item: item, newName: newName)
             }
         )
         .equatable()
@@ -356,15 +360,21 @@ private struct HierarchyRowView: View, Equatable {
     let onDelete: () -> Void
     let onChangeGranularity: (String, GranularityLevel?) -> Void
     let onChangeNonInputPolicy: (String, NonInputPolicy) -> Void
+    let onRenameField: ((String) -> Void)?
     
+    @State private var isLockHovered: Bool = false
     @State private var isCleanHovered: Bool = false
     @State private var isDeleteHovered: Bool = false
+    @State private var isEditingTitle: Bool = false
+    @State private var editingText: String = ""
+    @FocusState private var isTextFieldFocused: Bool
     
     nonisolated static func == (lhs: HierarchyRowView, rhs: HierarchyRowView) -> Bool {
         lhs.isSelected == rhs.isSelected &&
         lhs.item.id == rhs.item.id &&
         lhs.item.title == rhs.item.title &&
         lhs.item.subtitle == rhs.item.subtitle &&
+        lhs.item.hashSubtitle == rhs.item.hashSubtitle &&
         lhs.item.itemType == rhs.item.itemType &&
         lhs.item.currentSourceID == rhs.item.currentSourceID &&
         lhs.item.isLocked == rhs.item.isLocked &&
@@ -386,12 +396,44 @@ private struct HierarchyRowView: View, Equatable {
             // 图标
             itemIcon
             
-            // 标题与副标题
+            // 标题、副标题与哈希值
             VStack(alignment: .leading, spacing: AppConstants.UI.rowTextSpacing) {
-                Text(item.title)
-                    .font(.system(size: AppConstants.UI.rowTitleFontSize, weight: (isAppNode || isSelected) ? .semibold : .regular))
-                    .foregroundColor(isSelected ? .accentColor : .primary)
-                    .lineLimit(1)
+                if isEditingTitle {
+                    TextField("", text: $editingText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: AppConstants.UI.rowTitleFontSize, weight: .regular))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppConstants.UI.renameFieldCornerRadius)
+                                .stroke(Color.accentColor, lineWidth: AppConstants.UI.renameFieldBorderWidth)
+                                .background(Color(nsColor: .controlBackgroundColor))
+                        )
+                        .focused($isTextFieldFocused)
+                        .onSubmit {
+                            commitRename()
+                        }
+                        .onExitCommand {
+                            cancelRename()
+                        }
+                        .onChange(of: isTextFieldFocused) { focused in
+                            if !focused && isEditingTitle {
+                                commitRename()
+                            }
+                        }
+                } else {
+                    Text(item.title)
+                        .font(.system(size: AppConstants.UI.rowTitleFontSize, weight: (isAppNode || isSelected) ? .semibold : .regular))
+                        .foregroundColor(isSelected ? .accentColor : .primary)
+                        .lineLimit(1)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            if isFieldNode {
+                                startRenaming()
+                            }
+                        }
+                        .help(isFieldNode ? L10n.doubleClickToRenameHelp : "")
+                }
                 
                 if let subtitle = item.subtitle {
                     Text(subtitle)
@@ -399,12 +441,16 @@ private struct HierarchyRowView: View, Equatable {
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
+                
+                if let hashSubtitle = item.hashSubtitle {
+                    Text(hashSubtitle)
+                        .font(.system(size: AppConstants.UI.rowHashFontSize, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.85))
+                        .lineLimit(1)
+                }
             }
             
             Spacer()
-            
-            // 锁定控制按钮与状态
-            lockControlButton
             
             // 如果是 App 节点，提供生效粒度调节器与非输入策略调节器
             if case .app(let bundleID, let currentGranularity, let currentPolicy) = item.itemType {
@@ -415,49 +461,19 @@ private struct HierarchyRowView: View, Equatable {
             // 输入法选择器
             inputSourceMenu
             
+            // 锁定控制按钮（纯图标按钮，带悬停反馈）
+            lockControlButton
+            
             // 清理冗余下级记录按钮
             if item.isCleanActionAvailable {
-                Button {
-                    onClean()
-                } label: {
-                    Image(systemName: AppConstants.UI.cleanButtonIconName)
-                        .font(.system(size: AppConstants.UI.cleanButtonFontSize))
-                        .foregroundColor(cleanButtonForegroundColor)
-                        .frame(width: AppConstants.UI.actionButtonSize, height: AppConstants.UI.actionButtonSize)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppConstants.UI.actionButtonCornerRadius)
-                                .fill(cleanButtonHoverBackground)
-                        )
-                }
-                .buttonStyle(.plain)
-                .disabled(!item.canCleanSubItems)
-                .onHover { hovering in
-                    isCleanHovered = hovering
-                }
-                .help(cleanHelpText)
+                cleanControlButton
             }
             
             // 删除按钮
-            Button {
-                onDelete()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: AppConstants.UI.deleteButtonFontSize))
-                    .foregroundColor(deleteButtonForegroundColor)
-                    .frame(width: AppConstants.UI.actionButtonSize, height: AppConstants.UI.actionButtonSize)
-                    .background(
-                        RoundedRectangle(cornerRadius: AppConstants.UI.actionButtonCornerRadius)
-                            .fill(deleteButtonHoverBackground)
-                    )
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering in
-                isDeleteHovered = hovering
-            }
-            .help(L10n.deleteItemHelp)
+            deleteControlButton
         }
         .padding(.horizontal, AppConstants.UI.rowHorizontalPadding)
-        .frame(height: AppConstants.UI.treeRowHeight)
+        .frame(height: isFieldNode ? AppConstants.UI.fieldTreeRowHeight : AppConstants.UI.treeRowHeight)
         .background(
             RoundedRectangle(cornerRadius: AppConstants.UI.rowSelectionCornerRadius)
                 .fill(isSelected ? Color.accentColor.opacity(AppConstants.UI.rowSelectionBackgroundOpacity) : Color.clear)
@@ -465,11 +481,160 @@ private struct HierarchyRowView: View, Equatable {
         .contentShape(Rectangle())
     }
     
+    private var isAppNode: Bool {
+        if case .app = item.itemType { return true }
+        return false
+    }
+    
+    private var isFieldNode: Bool {
+        if case .field = item.itemType { return true }
+        return false
+    }
+    
+    private func startRenaming() {
+        editingText = item.title
+        isEditingTitle = true
+        isTextFieldFocused = true
+    }
+    
+    private func commitRename() {
+        guard isEditingTitle else { return }
+        isEditingTitle = false
+        let trimmed = editingText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty && trimmed != item.title {
+            onRenameField?(trimmed)
+        }
+    }
+    
+    private func cancelRename() {
+        isEditingTitle = false
+        editingText = ""
+    }
+    
+    private var lockControlButton: some View {
+        Button {
+            onToggleLock()
+        } label: {
+            Image(systemName: lockIconName)
+                .font(.system(size: AppConstants.LockUI.lockIconSize, weight: .medium))
+                .foregroundColor(lockButtonForegroundColor)
+                .frame(width: AppConstants.UI.actionButtonSize, height: AppConstants.UI.actionButtonSize)
+                .background(
+                    RoundedRectangle(cornerRadius: AppConstants.UI.actionButtonCornerRadius)
+                        .fill(lockButtonHoverBackground)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isLockHovered = hovering
+        }
+        .help(lockHelpText)
+    }
+    
+    private var cleanControlButton: some View {
+        Button {
+            onClean()
+        } label: {
+            Image(systemName: AppConstants.UI.cleanButtonIconName)
+                .font(.system(size: AppConstants.UI.cleanButtonFontSize, weight: .medium))
+                .foregroundColor(cleanButtonForegroundColor)
+                .frame(width: AppConstants.UI.actionButtonSize, height: AppConstants.UI.actionButtonSize)
+                .background(
+                    RoundedRectangle(cornerRadius: AppConstants.UI.actionButtonCornerRadius)
+                        .fill(cleanButtonHoverBackground)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!item.canCleanSubItems)
+        .onHover { hovering in
+            isCleanHovered = hovering
+        }
+        .help(cleanHelpText)
+    }
+    
+    private var deleteControlButton: some View {
+        Button {
+            onDelete()
+        } label: {
+            Image(systemName: "trash")
+                .font(.system(size: AppConstants.UI.deleteButtonFontSize, weight: .medium))
+                .foregroundColor(deleteButtonForegroundColor)
+                .frame(width: AppConstants.UI.actionButtonSize, height: AppConstants.UI.actionButtonSize)
+                .background(
+                    RoundedRectangle(cornerRadius: AppConstants.UI.actionButtonCornerRadius)
+                        .fill(deleteButtonHoverBackground)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isDeleteHovered = hovering
+        }
+        .help(L10n.deleteItemHelp)
+    }
+    
+    private var lockButtonHoverBackground: Color {
+        if isLockHovered {
+            switch item.lockStatus {
+            case .locked(let level):
+                return isSelected
+                    ? Color.white.opacity(AppConstants.UI.selectedRowButtonHoverBackgroundOpacity)
+                    : levelColor(for: level).opacity(AppConstants.UI.lockButtonHoverOpacity)
+            case .inherited:
+                return isSelected
+                    ? Color.white.opacity(AppConstants.UI.selectedRowButtonHoverBackgroundOpacity)
+                    : Color.secondary.opacity(AppConstants.UI.actionButtonHoverBackgroundOpacity)
+            case .unlocked:
+                return isSelected
+                    ? Color.white.opacity(AppConstants.UI.selectedRowButtonHoverBackgroundOpacity)
+                    : Color.primary.opacity(AppConstants.UI.actionButtonHoverBackgroundOpacity)
+            }
+        }
+        
+        switch item.lockStatus {
+        case .locked(let level):
+            return isSelected
+                ? Color.clear
+                : levelColor(for: level).opacity(AppConstants.UI.lockButtonActiveOpacity)
+        case .inherited:
+            return isSelected
+                ? Color.clear
+                : Color.secondary.opacity(AppConstants.UI.lockButtonInheritedOpacity)
+        case .unlocked:
+            return Color.clear
+        }
+    }
+    
+    private var lockButtonForegroundColor: Color {
+        switch item.lockStatus {
+        case .locked(let level):
+            if isLockHovered {
+                return isSelected ? .white : levelColor(for: level)
+            }
+            return isSelected ? Color.white.opacity(0.95) : levelColor(for: level)
+            
+        case .inherited:
+            if isLockHovered {
+                return isSelected ? .white : .primary
+            }
+            return isSelected ? Color.white.opacity(0.85) : .secondary
+            
+        case .unlocked:
+            if isLockHovered {
+                return isSelected ? .white : Color(nsColor: .controlAccentColor)
+            }
+            return isSelected ? Color.white.opacity(0.85) : .secondary.opacity(AppConstants.UI.unlockedButtonNormalOpacity)
+        }
+    }
+    
     private var cleanButtonHoverBackground: Color {
-        guard isCleanHovered && item.canCleanSubItems else { return .clear }
+        guard isCleanHovered && item.canCleanSubItems else {
+            return (item.canCleanSubItems && !isSelected)
+                ? Color.blue.opacity(AppConstants.UI.actionButtonActiveBackgroundOpacity)
+                : Color.clear
+        }
         return isSelected
             ? Color.white.opacity(AppConstants.UI.selectedRowButtonHoverBackgroundOpacity)
-            : Color.primary.opacity(AppConstants.UI.actionButtonHoverBackgroundOpacity)
+            : Color.blue.opacity(AppConstants.UI.cleanButtonHoverBackgroundOpacity)
     }
     
     private var cleanButtonForegroundColor: Color {
@@ -479,13 +644,13 @@ private struct HierarchyRowView: View, Equatable {
                 : Color.secondary.opacity(AppConstants.UI.disabledCleanButtonOpacity)
         }
         if isCleanHovered {
-            return isSelected ? .white : Color(nsColor: .controlAccentColor)
+            return isSelected ? .white : Color.blue
         }
-        return isSelected ? Color.white.opacity(0.85) : .secondary
+        return isSelected ? Color.white.opacity(0.9) : Color.blue.opacity(AppConstants.UI.cleanButtonNormalOpacity)
     }
     
     private var deleteButtonHoverBackground: Color {
-        guard isDeleteHovered else { return .clear }
+        guard isDeleteHovered else { return Color.clear }
         return isSelected
             ? Color.red.opacity(AppConstants.UI.selectedRowButtonHoverBackgroundOpacity)
             : Color.red.opacity(AppConstants.UI.deleteButtonHoverBackgroundOpacity)
@@ -493,77 +658,19 @@ private struct HierarchyRowView: View, Equatable {
     
     private var deleteButtonForegroundColor: Color {
         if isDeleteHovered {
-            return .red
+            return isSelected ? .white : .red
         }
-        return isSelected ? Color.white.opacity(0.85) : .secondary
-    }
-    
-    private var isAppNode: Bool {
-        if case .app = item.itemType { return true }
-        return false
-    }
-    
-    private var lockControlButton: some View {
-        Button {
-            onToggleLock()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: lockIconName)
-                    .font(.system(size: AppConstants.LockUI.lockIconSize))
-                Text(lockBadgeText)
-                    .font(.system(size: AppConstants.LockUI.lockTextSize, weight: item.isLocked ? .semibold : .regular))
-                    .lineLimit(1)
-            }
-            .frame(width: AppConstants.LockUI.lockButtonWidth)
-            .padding(.vertical, AppConstants.LockUI.badgePaddingVertical)
-            .background(lockBadgeBackground)
-            .foregroundColor(lockBadgeForeground)
-            .cornerRadius(AppConstants.UI.badgeCornerRadius)
-        }
-        .buttonStyle(.plain)
-        .help(lockHelpText)
+        return isSelected ? Color.white.opacity(0.85) : Color.red.opacity(AppConstants.UI.deleteButtonNormalOpacity)
     }
     
     private var lockIconName: String {
-        if item.isLocked || item.lockStatus.isProtected {
+        switch item.lockStatus {
+        case .locked:
             return AppConstants.LockUI.lockedIconName
-        }
-        return AppConstants.LockUI.unlockedIconName
-    }
-    
-    private var lockBadgeText: String {
-        switch item.lockStatus {
-        case .locked(let level):
-            switch level {
-            case .app: return L10n.appLockBadge
-            case .field: return L10n.fieldLockBadge
-            }
-        case .inherited(let level):
-            return L10n.inheritedLockBadgePrefix + level.localizedName
-        case .unlocked:
-            return L10n.unlockedActionText
-        }
-    }
-    
-    private var lockBadgeForeground: Color {
-        switch item.lockStatus {
-        case .locked(let level):
-            return levelColor(for: level)
         case .inherited:
-            return .secondary
+            return AppConstants.LockUI.lockShieldIconName
         case .unlocked:
-            return .secondary.opacity(0.8)
-        }
-    }
-    
-    private var lockBadgeBackground: Color {
-        switch item.lockStatus {
-        case .locked(let level):
-            return levelColor(for: level).opacity(0.15)
-        case .inherited:
-            return Color.secondary.opacity(0.12)
-        case .unlocked:
-            return Color(nsColor: .controlBackgroundColor)
+            return AppConstants.LockUI.unlockedIconName
         }
     }
     

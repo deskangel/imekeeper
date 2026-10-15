@@ -349,6 +349,14 @@ public enum L10n {
         isChinese ? "角色: \(role)" : "Role: \(role)"
     }
     
+    public static func fieldHashSubtitle(hashPrefix: String) -> String {
+        isChinese ? "哈希: \(hashPrefix)" : "Hash: \(hashPrefix)"
+    }
+    
+    public static var doubleClickToRenameHelp: String {
+        isChinese ? "双击以重命名输入框" : "Double-click to rename field"
+    }
+    
     // MARK: - Accessibility Alerts
     public static var permissionGrantedTitle: String {
         isChinese ? "辅助功能权限正常" : "Accessibility Permission Granted"

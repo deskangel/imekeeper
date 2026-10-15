@@ -206,6 +206,7 @@ public enum AppConstants {
         public static let minSettingsWindowHeight: CGFloat = 460.0
         
         public static let treeRowHeight: CGFloat = 34.0
+        public static let fieldTreeRowHeight: CGFloat = 46.0
         public static let statusItemIconSize: CGFloat = 18.0
         public static let badgeCornerRadius: CGFloat = 4.0
         public static let appRowIconSize: CGFloat = 16.0
@@ -213,6 +214,10 @@ public enum AppConstants {
         public static let iconThumbnailSize: CGFloat = 32.0
         public static let iconBitmapBitsPerSample: Int = 8
         public static let iconBitmapSamplesPerPixel: Int = 4
+        
+        public static let fieldHashDisplayLength: Int = 8
+        public static let renameFieldCornerRadius: CGFloat = 3.0
+        public static let renameFieldBorderWidth: CGFloat = 1.0
         
         public static let languagePickerWidth: CGFloat = 130.0
         public static let globalGranularityPickerWidth: CGFloat = 175.0
@@ -246,17 +251,27 @@ public enum AppConstants {
         public static let menuVerticalPadding: CGFloat = 3.0
         public static let menuContentSpacing: CGFloat = 4.0
         public static let menuSpacerMinLength: CGFloat = 2.0
-        public static let deleteButtonFontSize: CGFloat = 11.0
-        public static let cleanButtonFontSize: CGFloat = 11.0
+        public static let actionButtonSize: CGFloat = 26.0
+        public static let actionButtonCornerRadius: CGFloat = 5.0
+        public static let actionButtonFontSize: CGFloat = 13.0
+        public static let deleteButtonFontSize: CGFloat = 13.0
+        public static let cleanButtonFontSize: CGFloat = 13.0
         public static let cleanButtonIconName: String = "eraser"
         public static let disabledCleanButtonOpacity: Double = 0.35
-        public static let actionButtonSize: CGFloat = 22.0
-        public static let actionButtonCornerRadius: CGFloat = 4.0
         public static let actionButtonHoverBackgroundOpacity: Double = 0.12
-        public static let deleteButtonHoverBackgroundOpacity: Double = 0.15
+        public static let actionButtonActiveBackgroundOpacity: Double = 0.08
+        public static let cleanButtonHoverBackgroundOpacity: Double = 0.18
+        public static let deleteButtonHoverBackgroundOpacity: Double = 0.18
         public static let selectedRowButtonHoverBackgroundOpacity: Double = 0.22
+        public static let lockButtonActiveOpacity: Double = 0.14
+        public static let lockButtonHoverOpacity: Double = 0.24
+        public static let lockButtonInheritedOpacity: Double = 0.10
+        public static let deleteButtonNormalOpacity: Double = 0.75
+        public static let cleanButtonNormalOpacity: Double = 0.85
+        public static let unlockedButtonNormalOpacity: Double = 0.75
         public static let rowTitleFontSize: CGFloat = 13.0
         public static let rowSubtitleFontSize: CGFloat = 10.0
+        public static let rowHashFontSize: CGFloat = 9.5
         public static let rowContentSpacing: CGFloat = 8.0
         public static let rowTextSpacing: CGFloat = 1.0
         public static let rowHorizontalPadding: CGFloat = 4.0
@@ -280,11 +295,11 @@ public enum AppConstants {
         public static let unlockedIconName = "lock.open"
         public static let lockShieldIconName = "lock.shield.fill"
         
-        public static let lockIconSize: CGFloat = 11.0
+        public static let lockIconSize: CGFloat = 13.0
         public static let lockTextSize: CGFloat = 10.0
         public static let badgePaddingHorizontal: CGFloat = 6.0
         public static let badgePaddingVertical: CGFloat = 3.0
-        public static let lockButtonWidth: CGFloat = 86.0
+        public static let lockButtonWidth: CGFloat = 26.0
         
         public static let appLockHelpText = "应用级锁定：此应用下的输入法已被固定，临时手动切换后不会更新设置"
         public static let fieldLockHelpText = "输入框级锁定：此输入框下的输入法已被固定，临时手动切换后不会更新设置"
