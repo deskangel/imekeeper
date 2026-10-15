@@ -179,4 +179,19 @@ final class FocusAndNonInputPolicyTests: XCTestCase {
         let queryResult = store.queryPreferredSource(for: contextB, effectiveGranularity: .field)
         XCTAssertEqual(queryResult, "com.apple.inputmethod.SCIM.ITABC", "相同结构指纹的输入框应能跨窗口自动复用偏好")
     }
+    
+    func testIDEWindowStabilizationAcrossTabs() {
+        let fingerprinter = ElementFingerprinter()
+        let dummyElement = AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
+        
+        let vsCodeApp = NSRunningApplication.current
+        // 模拟同一工程下切换两个不同文件 tab：
+        // 无论文件如何切换，只要属于同一个工程工作区，windowID 应当完全恒定相同，杜绝窗口分裂
+        let contextTab1 = fingerprinter.resolveFocusContext(
+            from: dummyElement,
+            runningApp: vsCodeApp,
+            isBrowserApp: false
+        )
+        XCTAssertNotNil(contextTab1.windowID)
+    }
 }

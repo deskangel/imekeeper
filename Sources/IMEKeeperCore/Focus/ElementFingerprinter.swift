@@ -23,7 +23,7 @@ public struct ElementFingerprinter: Sendable {
         let appName = runningApp.localizedName ?? bundleID
         
         // 1. 提取所属窗口上下文
-        let (windowID, windowTitle) = extractWindowInfo(from: element)
+        let (windowID, windowTitle) = extractWindowInfo(from: element, bundleID: bundleID)
         
         // 2. 检查密码输入框 (Secure TextField)
         let isSecure = checkIsSecureField(element: element)
@@ -67,8 +67,22 @@ public struct ElementFingerprinter: Sendable {
         // 7. 提取输入框结构路径骨架（FINGERPRINT-V2）
         let structuralPath = extractStructuralPath(from: element)
         
-        // 计算稳定的指纹哈希（混合结构路径、角色、标识与描述，区分同窗口不同输入组件）
-        let fingerprintSeed = "\(bundleID)|\(structuralPath)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")|\(description ?? "")"
+        // 过滤易变的临时标题（如打开的文件名、动态网页名等），确保相同组件哈希恒定
+        let isIDE = AppConstants.IDEs.knownIDEBundleIDs.contains(bundleID)
+        let normalizedDesc: String
+        if isIDE {
+            // IDE 中的编辑区或文本区，剥离可能包含当前文件名（含 .）的 description
+            if let desc = description, !desc.contains(".") && !desc.contains("/") {
+                normalizedDesc = desc
+            } else {
+                normalizedDesc = ""
+            }
+        } else {
+            normalizedDesc = description ?? ""
+        }
+        
+        // 计算稳定的指纹哈希（混合结构路径、角色、标识与稳定描述）
+        let fingerprintSeed = "\(bundleID)|\(structuralPath)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")|\(normalizedDesc)"
         let fieldID = isInput ? computeSHA256(for: fingerprintSeed) : nil
         
         // 决定友好展示名称（优先语义描述，识别 IDE 编辑器、对话框、搜索栏等）
@@ -236,14 +250,14 @@ public struct ElementFingerprinter: Sendable {
     
     // MARK: - Private Attribute Extractors
     
-    private func extractWindowInfo(from element: AXUIElement) -> (windowID: String, windowTitle: String) {
+    private func extractWindowInfo(from element: AXUIElement, bundleID: String? = nil) -> (windowID: String, windowTitle: String) {
         var current: AXUIElement = element
         
         // 向上深度查找 AXWindow 节点，穿透深层 DOM/SwiftUI/Electron 控件层级
         for _ in 0..<AppConstants.Accessibility.maxWindowSearchDepth {
             if let role = copyStringAttribute(element: current, attribute: kAXRoleAttribute as CFString),
                role == kAXWindowRole as String {
-                let title = copyStringAttribute(element: current, attribute: kAXTitleAttribute as CFString) ?? AppConstants.Accessibility.defaultWindowPlaceholder
+                let rawTitle = copyStringAttribute(element: current, attribute: kAXTitleAttribute as CFString) ?? AppConstants.Accessibility.defaultWindowPlaceholder
                 let identifier = copyStringAttribute(element: current, attribute: kAXIdentifierAttribute as CFString) ?? ""
                 
                 // 优先读取 _AXWindowNumber 获得稳定的窗口系统级唯一标识
@@ -251,11 +265,18 @@ public struct ElementFingerprinter: Sendable {
                 if AXUIElementCopyAttributeValue(current, AppConstants.Accessibility.windowNumberAttribute as CFString, &winNumberRef) == .success,
                    let winNumber = winNumberRef {
                     let winID = computeSHA256(for: "win_num_\(winNumber)")
-                    return (winID, title)
+                    return (winID, rawTitle)
                 }
                 
-                let winID = computeSHA256(for: "\(title)|\(identifier)")
-                return (winID, title)
+                // IDE 类应用特殊处理：提取持久稳定的工作区/项目名，剥离打开的文件名与 tab 污染
+                if let bundle = bundleID, AppConstants.IDEs.knownIDEBundleIDs.contains(bundle) {
+                    let workspaceName = extractWorkspaceName(from: rawTitle)
+                    let winID = computeSHA256(for: "\(bundle)|workspace:\(workspaceName)")
+                    return (winID, workspaceName)
+                }
+                
+                let winID = computeSHA256(for: "\(rawTitle)|\(identifier)")
+                return (winID, rawTitle)
             }
             
             var parentRef: CFTypeRef?
@@ -272,20 +293,63 @@ public struct ElementFingerprinter: Sendable {
         if AXUIElementCopyAttributeValue(element, kAXWindowAttribute as CFString, &windowRef) == .success,
            let win = windowRef {
             let winElement = (win as! AXUIElement)
-            let title = copyStringAttribute(element: winElement, attribute: kAXTitleAttribute as CFString) ?? AppConstants.Accessibility.defaultWindowPlaceholder
+            let rawTitle = copyStringAttribute(element: winElement, attribute: kAXTitleAttribute as CFString) ?? AppConstants.Accessibility.defaultWindowPlaceholder
             
             var winNumberRef: CFTypeRef?
             if AXUIElementCopyAttributeValue(winElement, AppConstants.Accessibility.windowNumberAttribute as CFString, &winNumberRef) == .success,
                let winNumber = winNumberRef {
                 let winID = computeSHA256(for: "win_num_\(winNumber)")
-                return (winID, title)
+                return (winID, rawTitle)
             }
             
-            let winID = computeSHA256(for: title)
-            return (winID, title)
+            if let bundle = bundleID, AppConstants.IDEs.knownIDEBundleIDs.contains(bundle) {
+                let workspaceName = extractWorkspaceName(from: rawTitle)
+                let winID = computeSHA256(for: "\(bundle)|workspace:\(workspaceName)")
+                return (winID, workspaceName)
+            }
+            
+            let winID = computeSHA256(for: rawTitle)
+            return (winID, rawTitle)
         }
         
         return (AppConstants.Accessibility.unknownWindowIdentifier, AppConstants.Accessibility.defaultWindowPlaceholder)
+    }
+    
+    /// 从多标签页 IDE 的窗口标题中提取持久的工作区/项目名（剔除当前编辑的单个文件和路径）
+    private func extractWorkspaceName(from windowTitle: String) -> String {
+        let trimmed = windowTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == AppConstants.Accessibility.defaultWindowPlaceholder {
+            return AppConstants.Accessibility.defaultWindowPlaceholder
+        }
+        
+        // 匹配常见 IDE 标题分割符：
+        // 模式 A: "roguexian — enemy_bosses.dart" (项目名 — 文件名)
+        // 模式 B: "enemy_bosses.dart — roguexian" (文件名 — 项目名)
+        // 模式 C: "Main.swift - MyProject"
+        let separators = [" — ", " - ", " – "]
+        for sep in separators {
+            if trimmed.contains(sep) {
+                let parts = trimmed.components(separatedBy: sep).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+                if parts.count >= 2 {
+                    // 通常后缀或前缀中不包含文件扩展名（.dart, .swift, .ts 等）的一侧为工作区/工程名
+                    let first = parts[0]
+                    let last = parts[parts.count - 1]
+                    let firstHasExt = first.contains(".")
+                    let lastHasExt = last.contains(".")
+                    
+                    if !firstHasExt && lastHasExt {
+                        return first // "roguexian — enemy_bosses.dart" -> "roguexian"
+                    } else if firstHasExt && !lastHasExt {
+                        return last  // "enemy_bosses.dart — roguexian" -> "roguexian"
+                    } else {
+                        // 若都无扩展名或都有，优先取首部作为工作区
+                        return first
+                    }
+                }
+            }
+        }
+        
+        return trimmed
     }
     
     private func checkIsSecureField(element: AXUIElement) -> Bool {

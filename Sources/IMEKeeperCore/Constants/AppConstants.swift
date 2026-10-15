@@ -61,6 +61,22 @@ public enum AppConstants {
         ]
     }
     
+    /// 常见 IDE 与代码编辑器集合（需要剔除标签页文件名污染，按工作区识别物理窗口）
+    public enum IDEs {
+        public static let knownIDEBundleIDs: Set<String> = [
+            "com.microsoft.VSCode",
+            "com.microsoft.VSCodeInsiders",
+            "com.google.antigravity-ide",
+            "com.google.antigravity",
+            "com.todesktop.230313mzl4w4u92", // Cursor
+            "com.vscodium",
+            "com.sublimetext.4",
+            "com.jetbrains.intellij",
+            "com.jetbrains.pycharm",
+            "com.jetbrains.webstorm"
+        ]
+    }
+    
     /// 浏览器应用 Bundle ID 集合（对于这些应用，默认跟随限制至 Window 级别）
     public enum Browsers {
         public static let knownBrowserBundleIDs: Set<String> = [
@@ -221,7 +237,6 @@ public enum AppConstants {
     /// 锁定状态与徽标 UI 常量
     public enum LockUI {
         public static let appLockBadgeText = "应用锁定"
-        public static let windowLockBadgeText = "窗口锁定"
         public static let fieldLockBadgeText = "输入框锁定"
         public static let inheritedLockBadgeTextPrefix = "继承"
         public static let lockActionText = "锁定"
@@ -238,7 +253,6 @@ public enum AppConstants {
         public static let lockButtonWidth: CGFloat = 86.0
         
         public static let appLockHelpText = "应用级锁定：此应用下的输入法已被固定，临时手动切换后不会更新设置"
-        public static let windowLockHelpText = "窗口级锁定：此窗口下的输入法已被固定，临时手动切换后不会更新设置"
         public static let fieldLockHelpText = "输入框级锁定：此输入框下的输入法已被固定，临时手动切换后不会更新设置"
         public static let inheritedLockHelpText = "受上级锁定保护：临时手动切换后不会更新设置"
         public static let unlockedHelpText = "点击锁定此层级输入法，临时手动切换后不改变设置"

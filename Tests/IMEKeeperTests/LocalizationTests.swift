@@ -59,11 +59,8 @@ final class LocalizationTests: XCTestCase {
             XCTAssertEqual(L10n.doneButton, "Done")
             
             XCTAssertEqual(GranularityLevel.app.localizedName, "App Level (App)")
-            XCTAssertEqual(GranularityLevel.window.localizedName, "Window Level (Window)")
             XCTAssertEqual(GranularityLevel.field.localizedName, "Field Level (Field)")
             
-            XCTAssertEqual(L10n.windowSubtitle(fieldCount: 1), "Contains 1 field record")
-            XCTAssertEqual(L10n.windowSubtitle(fieldCount: 5), "Contains 5 field records")
             XCTAssertEqual(L10n.fieldRoleSubtitle(role: "AXTextField"), "Role: AXTextField")
             
             exp.fulfill()
@@ -83,11 +80,8 @@ final class LocalizationTests: XCTestCase {
             XCTAssertEqual(L10n.doneButton, "完成")
             
             XCTAssertEqual(GranularityLevel.app.localizedName, "应用级 (App)")
-            XCTAssertEqual(GranularityLevel.window.localizedName, "窗口级 (Window)")
             XCTAssertEqual(GranularityLevel.field.localizedName, "输入框级 (Field)")
             
-            XCTAssertEqual(L10n.windowSubtitle(fieldCount: 1), "包含 1 个输入框记录")
-            XCTAssertEqual(L10n.windowSubtitle(fieldCount: 5), "包含 5 个输入框记录")
             XCTAssertEqual(L10n.fieldRoleSubtitle(role: "AXTextField"), "角色: AXTextField")
             
             exp.fulfill()

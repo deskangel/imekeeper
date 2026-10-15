@@ -51,57 +51,6 @@ public struct FieldProfile: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-/// 窗口级别记忆实体
-public struct WindowProfile: Codable, Identifiable, Hashable, Sendable {
-    /// 窗口唯一标识指纹
-    public let id: String
-    
-    /// 窗口标题
-    public var windowTitle: String
-    
-    /// 该窗口最后使用的输入法 ID（作为新建输入框的默认继承基准）
-    public var lastSourceID: String
-    
-    /// 该窗口内记录的各输入框字典（key 为 fieldID）
-    public var fields: [String: FieldProfile]
-    
-    /// 是否锁定输入法（锁定后该窗口临时切换不更新设置）
-    public var isLocked: Bool
-    
-    /// 最后更新时间
-    public var lastUpdated: Date
-    
-    public init(
-        id: String,
-        windowTitle: String,
-        lastSourceID: String,
-        fields: [String: FieldProfile] = [:],
-        isLocked: Bool = false,
-        lastUpdated: Date = Date()
-    ) {
-        self.id = id
-        self.windowTitle = windowTitle
-        self.lastSourceID = lastSourceID
-        self.fields = fields
-        self.isLocked = isLocked
-        self.lastUpdated = lastUpdated
-    }
-    
-    private enum CodingKeys: String, CodingKey {
-        case id, windowTitle, lastSourceID, fields, isLocked, lastUpdated
-    }
-    
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try container.decode(String.self, forKey: .id)
-        self.windowTitle = try container.decode(String.self, forKey: .windowTitle)
-        self.lastSourceID = try container.decode(String.self, forKey: .lastSourceID)
-        self.fields = try container.decodeIfPresent([String: FieldProfile].self, forKey: .fields) ?? [:]
-        self.isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
-        self.lastUpdated = try container.decodeIfPresent(Date.self, forKey: .lastUpdated) ?? Date()
-    }
-}
-
 /// 应用级别记忆实体
 public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
     /// 应用程序 Bundle Identifier (如 "com.apple.dt.Xcode")
@@ -116,10 +65,10 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
     /// 该应用最后使用的输入法 ID
     public var lastSourceID: String
     
-    /// 该应用内记录的窗口字典（key 为 windowID）
-    public var windows: [String: WindowProfile]
+    /// 该应用内记录的各输入框字典（key 为 fieldID）
+    public var fields: [String: FieldProfile]
     
-    /// 是否锁定输入法（锁定后该应用内所有窗口和输入框临时切换均不更新设置）
+    /// 是否锁定输入法（锁定后该应用内所有输入框临时切换均不更新设置）
     public var isLocked: Bool
     
     /// 最后更新时间
@@ -130,7 +79,7 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
         appName: String,
         configuredGranularity: GranularityLevel? = nil,
         lastSourceID: String,
-        windows: [String: WindowProfile] = [:],
+        fields: [String: FieldProfile] = [:],
         isLocked: Bool = false,
         lastUpdated: Date = Date()
     ) {
@@ -138,13 +87,22 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
         self.appName = appName
         self.configuredGranularity = configuredGranularity
         self.lastSourceID = lastSourceID
-        self.windows = windows
+        self.fields = fields
         self.isLocked = isLocked
         self.lastUpdated = lastUpdated
     }
     
     private enum CodingKeys: String, CodingKey {
-        case id, appName, configuredGranularity, lastSourceID, windows, isLocked, lastUpdated
+        case id, appName, configuredGranularity, lastSourceID, fields, isLocked, lastUpdated
+    }
+    
+    private enum LegacyCodingKeys: String, CodingKey {
+        case windows
+    }
+    
+    // 用于兼容迁移旧版磁盘上的 WindowProfile 结构
+    private struct LegacyWindowProfile: Decodable {
+        let fields: [String: FieldProfile]?
     }
     
     public init(from decoder: Decoder) throws {
@@ -153,7 +111,24 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
         self.appName = try container.decode(String.self, forKey: .appName)
         self.configuredGranularity = try container.decodeIfPresent(GranularityLevel.self, forKey: .configuredGranularity)
         self.lastSourceID = try container.decode(String.self, forKey: .lastSourceID)
-        self.windows = try container.decodeIfPresent([String: WindowProfile].self, forKey: .windows) ?? [:]
+        
+        var parsedFields = try container.decodeIfPresent([String: FieldProfile].self, forKey: .fields) ?? [:]
+        
+        // 平滑升级：若为旧版本持久化数据，将 windows 字典下的 fields 提取扁平化并入 app.fields
+        if parsedFields.isEmpty {
+            let legacyContainer = try? decoder.container(keyedBy: LegacyCodingKeys.self)
+            if let legacyWindows = try? legacyContainer?.decodeIfPresent([String: LegacyWindowProfile].self, forKey: .windows) {
+                for (_, win) in legacyWindows {
+                    if let winFields = win.fields {
+                        for (fieldID, field) in winFields {
+                            parsedFields[fieldID] = field
+                        }
+                    }
+                }
+            }
+        }
+        
+        self.fields = parsedFields
         self.isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
         self.lastUpdated = try container.decodeIfPresent(Date.self, forKey: .lastUpdated) ?? Date()
     }
@@ -163,11 +138,10 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
 public struct HierarchyItem: Identifiable, Hashable, Sendable {
     public enum ItemType: Hashable, Sendable {
         case app(bundleID: String, granularity: GranularityLevel, nonInputPolicy: NonInputPolicy)
-        case window(bundleID: String, windowID: String)
-        case field(bundleID: String, windowID: String, fieldID: String)
+        case field(bundleID: String, fieldID: String)
     }
     
-    /// 区分三个不同层次的锁定状态与继承保护
+    /// 区分锁定状态与继承保护
     public enum LockStatus: Hashable, Sendable {
         case unlocked
         case locked(level: GranularityLevel)
@@ -212,10 +186,10 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         self.children = children
     }
     
-    /// 是否展示清理下级冗余记录按钮（App 节点与 Window 节点常态展示，Field 节点不展示）
+    /// 是否展示清理下级冗余记录按钮（App 节点常态展示，Field 节点不展示）
     public var isCleanActionAvailable: Bool {
         switch itemType {
-        case .app, .window:
+        case .app:
             return true
         case .field:
             return false
@@ -229,13 +203,9 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
             switch granularity {
             case .app:
                 return children != nil && !(children!.isEmpty)
-            case .window:
-                return children?.contains { ($0.children != nil && !$0.children!.isEmpty) } ?? false
             case .field:
                 return false
             }
-        case .window:
-            return children != nil && !(children!.isEmpty)
         case .field:
             return false
         }

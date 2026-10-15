@@ -308,7 +308,6 @@ public struct HierarchySettingsView: View {
 private func levelColor(for level: GranularityLevel) -> Color {
     switch level {
     case .app: return .blue
-    case .window: return .purple
     case .field: return .orange
     }
 }
@@ -537,7 +536,6 @@ private struct HierarchyRowView: View, Equatable {
         case .locked(let level):
             switch level {
             case .app: return L10n.appLockBadge
-            case .window: return L10n.windowLockBadge
             case .field: return L10n.fieldLockBadge
             }
         case .inherited(let level):
@@ -574,7 +572,6 @@ private struct HierarchyRowView: View, Equatable {
         case .locked(let level):
             switch level {
             case .app: return L10n.appLockHelpText
-            case .window: return L10n.windowLockHelpText
             case .field: return L10n.fieldLockHelpText
             }
         case .inherited:
@@ -590,13 +587,9 @@ private struct HierarchyRowView: View, Equatable {
             switch granularity {
             case .app:
                 return item.canCleanSubItems ? L10n.cleanAppSubItemsHelp : L10n.noSubItemsToCleanHelp
-            case .window:
-                return item.canCleanSubItems ? L10n.cleanAppFieldsHelp : L10n.noSubItemsToCleanHelp
             case .field:
                 return L10n.fieldLevelNoCleanNeededHelp
             }
-        case .window:
-            return item.canCleanSubItems ? L10n.cleanWindowFieldsHelp : L10n.noSubItemsToCleanHelp
         case .field:
             return L10n.noSubItemsToCleanHelp
         }
@@ -607,9 +600,6 @@ private struct HierarchyRowView: View, Equatable {
         switch item.itemType {
         case .app(let bundleID, _, _):
             AppRowIconView(bundleID: bundleID, iconSize: AppConstants.UI.appRowIconSize)
-        case .window:
-            Image(systemName: "macwindow")
-                .foregroundColor(.purple)
         case .field:
             Image(systemName: "character.cursor.ibeam")
                 .foregroundColor(.orange)

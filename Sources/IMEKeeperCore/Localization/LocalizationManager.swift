@@ -135,11 +135,11 @@ public enum L10n {
     }
     
     public static var settingsHeaderSubtitle: String {
-        isChinese ? "按层级组织管理各窗口与输入框的输入法记忆" : "Manage input source memory hierarchically across windows and fields"
+        isChinese ? "按应用与输入框组织管理输入法记忆" : "Manage input source memory hierarchically across apps and fields"
     }
     
     public static var searchPlaceholder: String {
-        isChinese ? "搜索应用或窗口..." : "Search apps or windows..."
+        isChinese ? "搜索应用或输入框..." : "Search apps or fields..."
     }
     
     public static var defaultGranularityLabel: String {
@@ -200,15 +200,11 @@ public enum L10n {
     }
     
     public static var cleanAppSubItemsHelp: String {
-        isChinese ? "清理此应用下的窗口与输入框记录" : "Clean windows and fields in this app"
+        isChinese ? "清理此应用下的输入框记录" : "Clean fields in this app"
     }
     
     public static var cleanAppFieldsHelp: String {
         isChinese ? "清理此应用下的输入框记录" : "Clean fields in this app"
-    }
-    
-    public static var cleanWindowFieldsHelp: String {
-        isChinese ? "清理此窗口下的输入框记录" : "Clean fields in this window"
     }
     
     public static var noSubItemsToCleanHelp: String {
@@ -227,8 +223,8 @@ public enum L10n {
     
     public static var cleanAllRedundantHelp: String {
         isChinese
-            ? "根据各应用的生效粒度，一键清理所有多余的窗口与输入框历史记录"
-            : "Clean all redundant window and field records according to each app's granularity"
+            ? "根据各应用的生效粒度，一键清理所有多余的输入框历史记录"
+            : "Clean all redundant field records according to each app's granularity"
     }
     
     public static var granularityHelp: String {
@@ -252,8 +248,6 @@ public enum L10n {
         switch level {
         case .app:
             return isChinese ? "应用级 (App)" : "App Level (App)"
-        case .window:
-            return isChinese ? "窗口级 (Window)" : "Window Level (Window)"
         case .field:
             return isChinese ? "输入框级 (Field)" : "Field Level (Field)"
         }
@@ -263,16 +257,12 @@ public enum L10n {
         switch level {
         case .app:
             return isChinese
-                ? "该 App 内所有窗口和输入框统一使用同一个输入法"
-                : "All windows and input fields in this app share the same input source"
-        case .window:
-            return isChinese
-                ? "按窗口分别记忆，同一窗口内的不同输入框共享"
-                : "Remembered per window; fields within the same window share the source"
+                ? "该 App 内所有输入框统一使用同一个输入法"
+                : "All input fields in this app share the same input source"
         case .field:
             return isChinese
-                ? "精细记忆同窗口内的各个输入框，按控件独立切换"
-                : "Precisely remember each input field in a window and switch per control"
+                ? "精细记忆各个输入框，按控件独立切换"
+                : "Precisely remember each input field and switch per control"
         }
     }
     
@@ -310,10 +300,6 @@ public enum L10n {
         isChinese ? "应用锁定" : "App Locked"
     }
     
-    public static var windowLockBadge: String {
-        isChinese ? "窗口锁定" : "Window Locked"
-    }
-    
     public static var fieldLockBadge: String {
         isChinese ? "输入框锁定" : "Field Locked"
     }
@@ -334,12 +320,6 @@ public enum L10n {
         isChinese
             ? "应用级锁定：此应用下的输入法已被固定，临时手动切换后不会更新设置"
             : "App-level lock: Input source is fixed for this app; temporary manual switches will not update settings"
-    }
-    
-    public static var windowLockHelpText: String {
-        isChinese
-            ? "窗口级锁定：此窗口下的输入法已被固定，临时手动切换后不会更新设置"
-            : "Window-level lock: Input source is fixed for this window; temporary manual switches will not update settings"
     }
     
     public static var fieldLockHelpText: String {
@@ -367,20 +347,6 @@ public enum L10n {
     
     public static func fieldRoleSubtitle(role: String) -> String {
         isChinese ? "角色: \(role)" : "Role: \(role)"
-    }
-    
-    public static func windowSubtitle(fieldCount: Int) -> String {
-        if isChinese {
-            return "包含 \(fieldCount) 个输入框记录"
-        } else {
-            return fieldCount == 1 ? "Contains 1 field record" : "Contains \(fieldCount) field records"
-        }
-    }
-    
-    public static var browserEnvironmentHint: String {
-        isChinese
-            ? " · 浏览器环境（受保护最高生效至窗口级）"
-            : " · Browser environment (capped at Window level)"
     }
     
     // MARK: - Accessibility Alerts

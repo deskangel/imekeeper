@@ -32,7 +32,7 @@ final class InputSwitchAntiOscillationTests: XCTestCase {
     
     // MARK: - Non-Input Field Manual Switch & Inheritance Tests
     
-    func testNonInputFieldManualSwitchPersistsAtWindowLevel() {
+    func testNonInputFieldManualSwitchPersistsAtAppLevel() {
         let bundleID = "com.apple.Safari"
         let windowID = "win-main-page"
         let sourceChinese = "com.apple.inputmethod.SCIM.ITABC"
@@ -50,20 +50,20 @@ final class InputSwitchAntiOscillationTests: XCTestCase {
             isInputField: false
         )
         
-        // 模拟用户在空白区手动按下快捷键切为中文：降级以 .window 粒度记录
-        store.record(context: nonInputContext, sourceID: sourceChinese, effectiveGranularity: .window)
+        // 模拟用户在空白区手动按下快捷键切为中文：回退以 .app 粒度记录
+        store.record(context: nonInputContext, sourceID: sourceChinese, effectiveGranularity: .app)
         
-        // 验证窗口级输入法偏好成功更新为中文
-        let queriedSource = store.queryPreferredSource(for: nonInputContext, effectiveGranularity: .window)
-        XCTAssertEqual(queriedSource, sourceChinese, "非输入框下的手动切换应当成功持久化至 Window 层级")
+        // 验证应用级输入法偏好成功更新为中文
+        let queriedSource = store.queryPreferredSource(for: nonInputContext, effectiveGranularity: .app)
+        XCTAssertEqual(queriedSource, sourceChinese, "非输入框下的手动切换应当成功持久化至 App 层级")
     }
     
-    func testNewFieldInheritsWindowManualSwitchPreference() {
+    func testNewFieldInheritsAppManualSwitchPreference() {
         let bundleID = "com.apple.Notes"
         let windowID = "win-note-1"
         let sourceChinese = "com.apple.inputmethod.SCIM.ITABC"
         
-        // 1. 用户在窗口空白区手动切换输入法为中文
+        // 1. 用户在应用空白区手动切换输入法为中文
         let nonInputContext = FocusContext(
             bundleID: bundleID,
             appName: "Notes",
@@ -74,7 +74,7 @@ final class InputSwitchAntiOscillationTests: XCTestCase {
             role: "AXWindow",
             isInputField: false
         )
-        store.record(context: nonInputContext, sourceID: sourceChinese, effectiveGranularity: .window)
+        store.record(context: nonInputContext, sourceID: sourceChinese, effectiveGranularity: .app)
         
         // 2. 随后用户点击进入全新输入框 (从未单独记录过 fieldID)
         let newFieldContext = FocusContext(
@@ -88,9 +88,9 @@ final class InputSwitchAntiOscillationTests: XCTestCase {
             isInputField: true
         )
         
-        // 3. 在 field 粒度下查询：新输入框应当继承窗口最后使用的中文输入法，杜绝切回旧英文
+        // 3. 在 field 粒度下查询：新输入框应当继承应用最后使用的中文输入法，杜绝切回旧英文
         let resolvedSource = store.queryPreferredSource(for: newFieldContext, effectiveGranularity: .field)
-        XCTAssertEqual(resolvedSource, sourceChinese, "新获得焦点的输入框必须自动继承该窗口手动设定的输入法，避免振荡切英")
+        XCTAssertEqual(resolvedSource, sourceChinese, "新获得焦点的输入框必须自动继承该应用手动设定的输入法，避免振荡切英")
     }
     
     // MARK: - Lock Safety Verification

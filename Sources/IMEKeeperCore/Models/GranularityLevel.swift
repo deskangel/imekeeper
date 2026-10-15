@@ -2,13 +2,10 @@ import Foundation
 
 /// 记忆与自动切换的粒度控制级别
 public enum GranularityLevel: String, Codable, CaseIterable, Identifiable, Sendable {
-    /// 仅记住整个 App 的输入法（该应用所有窗口与输入框共用一个输入法）
+    /// 仅记住整个 App 的输入法（该应用所有输入框共用一个输入法）
     case app = "app"
     
-    /// 记住该 App 下不同 Window 的输入法（同一窗口内的所有输入框共用，不同窗口独立）
-    case window = "window"
-    
-    /// 深度记住同一窗口下不同 Field（输入框）的输入法
+    /// 深度记住应用内不同 Field（输入框）的输入法
     case field = "field"
     
     public var id: String { rawValue }
@@ -28,8 +25,6 @@ public enum GranularityLevel: String, Codable, CaseIterable, Identifiable, Senda
         switch self {
         case .app:
             return "app.badge.checkmark"
-        case .window:
-            return "macwindow"
         case .field:
             return "character.cursor.ibeam"
         }

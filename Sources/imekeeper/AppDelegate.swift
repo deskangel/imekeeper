@@ -266,13 +266,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 确定记录层级：
         // 1. 若当前在输入框内（或应用为终端豁免），按当前有效粒度完整记录
-        // 2. 若当前在非输入框内，不写入可能含随机指纹的 field 级，但降级记录到 window 级，使窗口内后续输入框能继承该偏好
+        // 2. 若当前在非输入框内，不写入可能含随机指纹的 field 级，直接记录到 app 级基准
         let isExemptApp = granularityManager.effectiveNonInputPolicy(for: context.bundleID) == .exempt
         let recordGranularity: GranularityLevel
         if context.isInputField || isExemptApp {
             recordGranularity = effectiveGranularity
         } else {
-            recordGranularity = (effectiveGranularity == .field) ? .window : effectiveGranularity
+            recordGranularity = .app
         }
         
         profileStore.record(

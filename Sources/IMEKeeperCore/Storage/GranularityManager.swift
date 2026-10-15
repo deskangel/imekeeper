@@ -26,24 +26,12 @@ public final class GranularityManager: @unchecked Sendable {
     /// 获取指定 Bundle ID 应用的实际生效粒度
     /// - Parameters:
     ///   - bundleID: 目标应用 ID
-    ///   - isBrowser: 该应用是否为已知 Web 浏览器（若为浏览器，强制截断至不超过 .window 级）
+    ///   - isBrowser: 该应用是否为已知 Web 浏览器（现已采用纯净 App/Field 双层模型，此参数向后兼容）
     public func effectiveGranularity(for bundleID: String, isBrowser: Bool = false) -> GranularityLevel {
         lock.lock()
         defer { lock.unlock() }
         
-        let configured = appGranularities[bundleID]
-        
-        // 浏览器策略：
-        // 1. 若用户针对该浏览器显式单独配置过（如用户特意选了 .field 或 .app），则尊重用户的显式配置
-        // 2. 若用户未独立配置，跟随全局默认时，若全局默认是 .field 则自动对浏览器保护截断至 .window
-        if isBrowser {
-            if let userConfigured = configured {
-                return userConfigured
-            }
-            return globalDefault == .field ? .window : globalDefault
-        }
-        
-        return configured ?? globalDefault
+        return appGranularities[bundleID] ?? globalDefault
     }
     
     /// 获取指定 App 是否有独立配置过粒度（否则为 nil，代表跟随默认）

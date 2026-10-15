@@ -170,31 +170,21 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
         )
         
         let appID = "app:com.apple.dt.Xcode"
-        let winID = "win:com.apple.dt.Xcode:win-main"
-        let fieldID = "field:com.apple.dt.Xcode:win-main:field-editor"
+        let fieldID = "field:com.apple.dt.Xcode:field-editor"
         
         // 1. 当粒度设为 .app 时，仅定位到 app 节点，不展开任何子项
         granManager.setGranularity(for: "com.apple.dt.Xcode", level: .app)
         viewModel.handleFocusChanged(contextField)
         XCTAssertEqual(viewModel.selectedItemID, appID)
         XCTAssertFalse(viewModel.isExpanded(appID))
-        XCTAssertFalse(viewModel.isExpanded(winID))
         
-        // 2. 当粒度设为 .window 时，定位到 window 节点，并自动展开父级 app
-        granManager.setGranularity(for: "com.apple.dt.Xcode", level: .window)
-        viewModel.handleFocusChanged(contextField)
-        XCTAssertEqual(viewModel.selectedItemID, winID)
-        XCTAssertTrue(viewModel.isExpanded(appID))
-        XCTAssertFalse(viewModel.isExpanded(winID))
-        
-        // 3. 当粒度设为 .field 时，定位到具体的 field 节点，并同时展开所属 app 与所属 window
+        // 2. 当粒度设为 .field 时，定位到具体的 field 节点，并同时展开所属 app
         granManager.setGranularity(for: "com.apple.dt.Xcode", level: .field)
         viewModel.handleFocusChanged(contextField)
         XCTAssertEqual(viewModel.selectedItemID, fieldID)
         XCTAssertTrue(viewModel.isExpanded(appID))
-        XCTAssertTrue(viewModel.isExpanded(winID))
         
-        // 4. 当处于 .field 粒度但遇到未记录的输入框或非输入区时，平滑回退至窗口级并展开 app
+        // 3. 当处于 .field 粒度但遇到未记录的输入框或非输入区时，平滑回退至 app 级
         let nonFieldContext = FocusContext(
             bundleID: "com.apple.dt.Xcode",
             appName: "Xcode",
@@ -204,17 +194,16 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
             isInputField: false
         )
         viewModel.handleFocusChanged(nonFieldContext)
-        XCTAssertEqual(viewModel.selectedItemID, winID)
-        XCTAssertTrue(viewModel.isExpanded(appID))
+        XCTAssertEqual(viewModel.selectedItemID, appID)
         
-        // 5. 当遇到完全未记录的窗口时，平滑回退至 app 级
-        let unrecordedWinContext = FocusContext(
+        // 4. 当遇到完全未记录的上下文时，平滑定位至 app 级
+        let unrecordedContext = FocusContext(
             bundleID: "com.apple.dt.Xcode",
             appName: "Xcode",
             windowID: "unknown-win",
             windowTitle: "Unknown"
         )
-        viewModel.handleFocusChanged(unrecordedWinContext)
+        viewModel.handleFocusChanged(unrecordedContext)
         XCTAssertEqual(viewModel.selectedItemID, appID)
         
         try? FileManager.default.removeItem(at: storeURL)
@@ -261,9 +250,5 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
         viewModel.setExpanded(appNodeID, isExpanded: false)
         viewModel.setGranularity(for: appBundleID, level: .app)
         XCTAssertFalse(viewModel.isExpanded(appNodeID))
-        
-        // 设为 .window 粒度时同样自动展开
-        viewModel.setGranularity(for: appBundleID, level: .window)
-        XCTAssertTrue(viewModel.isExpanded(appNodeID))
     }
 }

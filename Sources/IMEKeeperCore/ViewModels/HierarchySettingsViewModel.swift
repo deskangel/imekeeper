@@ -107,7 +107,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
     /// 设置某个 App 专属生效粒度
     public func setGranularity(for bundleID: String, level: GranularityLevel?) {
         granularityManager.setGranularity(for: bundleID, level: level)
-        if level == .field || level == .window {
+        if level == .field {
             expandedItemIDs.insert("app:\(bundleID)")
         }
         refreshTree()
@@ -154,7 +154,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
         refreshTree()
     }
     
-    /// 清理指定层级项的下级记录（App 粒度下清理窗口与输入框，Window 粒度下清理输入框）
+    /// 清理指定层级项的下级记录（App 粒度下清理其所有输入框记录）
     public func cleanItem(_ item: HierarchyItem) {
         store.clean(item: item)
         refreshTree()
@@ -163,12 +163,6 @@ public final class HierarchySettingsViewModel: ObservableObject {
     /// 清理指定应用下的下级记忆（根据生效粒度）
     public func cleanSubItems(for bundleID: String, granularity: GranularityLevel) {
         store.cleanSubItems(for: bundleID, granularity: granularity)
-        refreshTree()
-    }
-    
-    /// 清理指定窗口下的所有输入框记录
-    public func cleanFields(for bundleID: String, windowID: String) {
-        store.cleanFields(for: bundleID, windowID: windowID)
         refreshTree()
     }
     
@@ -221,37 +215,20 @@ public final class HierarchySettingsViewModel: ObservableObject {
         
         switch effectiveGranularity {
         case .app:
-            // 设定为 app 粒度时，仅定位到 App 根节点
+            // 设定为 app 粒度时，定位到 App 根节点
             return (targetID: appID, ancestorIDs: [])
             
-        case .window:
-            let windowID = "win:\(context.bundleID):\(context.windowID)"
-            if let windowItems = appItem.children,
-               windowItems.contains(where: { $0.id == windowID }) {
-                return (targetID: windowID, ancestorIDs: [appID])
-            } else {
-                // 窗口尚未记录或不存在，平滑回退至应用级
-                return (targetID: appID, ancestorIDs: [])
-            }
-            
         case .field:
-            let windowID = "win:\(context.bundleID):\(context.windowID)"
-            guard let windowItems = appItem.children,
-                  let windowItem = windowItems.first(where: { $0.id == windowID }) else {
-                // 窗口不存在，平滑回退至应用级
-                return (targetID: appID, ancestorIDs: [])
-            }
-            
             if let fieldID = context.fieldID {
-                let fieldItemID = "field:\(context.bundleID):\(context.windowID):\(fieldID)"
-                if let fieldItems = windowItem.children,
+                let fieldItemID = "field:\(context.bundleID):\(fieldID)"
+                if let fieldItems = appItem.children,
                    fieldItems.contains(where: { $0.id == fieldItemID }) {
-                    return (targetID: fieldItemID, ancestorIDs: [appID, windowID])
+                    return (targetID: fieldItemID, ancestorIDs: [appID])
                 }
             }
             
-            // 输入框尚未记录或焦点处于非输入区，回退至所属窗口级并展开所属应用
-            return (targetID: windowID, ancestorIDs: [appID])
+            // 输入框尚未记录或焦点处于非输入区，回退至所属应用
+            return (targetID: appID, ancestorIDs: [])
         }
     }
     

@@ -42,37 +42,12 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         case .app:
             return appProfile.lastSourceID
             
-        case .window:
-            if let windowProfile = appProfile.windows[context.windowID] {
-                return windowProfile.lastSourceID
-            }
-            return appProfile.lastSourceID
-            
         case .field:
-            if let windowProfile = appProfile.windows[context.windowID] {
-                if let fieldID = context.fieldID,
-                   let fieldProfile = windowProfile.fields[fieldID] {
-                    return fieldProfile.sourceID
-                }
-                // 若当前窗口未曾记录该输入框，但该 App 其他窗口已配置过相同结构指纹的输入框，跨窗口复用
-                if let fieldID = context.fieldID {
-                    for otherWin in appProfile.windows.values {
-                        if let fieldProfile = otherWin.fields[fieldID] {
-                            return fieldProfile.sourceID
-                        }
-                    }
-                }
-                // 用户决策：同窗口未曾记录过的全新输入框，默认继承窗口最后使用的输入法
-                return windowProfile.lastSourceID
+            if let fieldID = context.fieldID,
+               let fieldProfile = appProfile.fields[fieldID] {
+                return fieldProfile.sourceID
             }
-            // 若为全新窗口，优先匹配同 App 下已记录过的相同输入框指纹
-            if let fieldID = context.fieldID {
-                for otherWin in appProfile.windows.values {
-                    if let fieldProfile = otherWin.fields[fieldID] {
-                        return fieldProfile.sourceID
-                    }
-                }
-            }
+            // 未曾记录过的全新输入框，默认继承应用最后使用的输入法
             return appProfile.lastSourceID
         }
     }
@@ -100,21 +75,10 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         case .app:
             return appProfile.isLocked
             
-        case .window:
-            if let windowProfile = appProfile.windows[context.windowID] {
-                return windowProfile.isLocked
-            }
-            return false
-            
         case .field:
-            if let windowProfile = appProfile.windows[context.windowID] {
-                if windowProfile.isLocked {
-                    return true
-                }
-                if let fieldID = context.fieldID,
-                   let fieldProfile = windowProfile.fields[fieldID] {
-                    return fieldProfile.isLocked
-                }
+            if let fieldID = context.fieldID,
+               let fieldProfile = appProfile.fields[fieldID] {
+                return fieldProfile.isLocked
             }
             return false
         }
@@ -140,22 +104,11 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         case .app:
             return .unlocked
             
-        case .window:
-            if let windowProfile = appProfile.windows[context.windowID], windowProfile.isLocked {
-                return .locked(level: .window)
-            }
-            return .unlocked
-            
         case .field:
-            if let windowProfile = appProfile.windows[context.windowID] {
-                if let fieldID = context.fieldID,
-                   let fieldProfile = windowProfile.fields[fieldID],
-                   fieldProfile.isLocked {
-                    return .locked(level: .field)
-                }
-                if windowProfile.isLocked {
-                    return .inherited(from: .window)
-                }
+            if let fieldID = context.fieldID,
+               let fieldProfile = appProfile.fields[fieldID],
+               fieldProfile.isLocked {
+                return .locked(level: .field)
             }
             return .unlocked
         }
@@ -175,17 +128,10 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                 app.isLocked.toggle()
                 profiles[bundleID] = app
             }
-        case .window(let bundleID, let windowID):
-            if var app = profiles[bundleID], var win = app.windows[windowID] {
-                win.isLocked.toggle()
-                app.windows[windowID] = win
-                profiles[bundleID] = app
-            }
-        case .field(let bundleID, let windowID, let fieldID):
-            if var app = profiles[bundleID], var win = app.windows[windowID], var field = win.fields[fieldID] {
+        case .field(let bundleID, let fieldID):
+            if var app = profiles[bundleID], var field = app.fields[fieldID] {
                 field.isLocked.toggle()
-                win.fields[fieldID] = field
-                app.windows[windowID] = win
+                app.fields[fieldID] = field
                 profiles[bundleID] = app
             }
         }
@@ -213,41 +159,24 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             appProfile.lastUpdated = Date()
         }
         
-        // 检查窗口是否为新创建：新创建的窗口继承上级 App 的输入法设置
-        let isNewWindow = appProfile.windows[context.windowID] == nil
-        var windowProfile = appProfile.windows[context.windowID] ?? WindowProfile(
-            id: context.windowID,
-            windowTitle: context.windowTitle,
-            lastSourceID: appProfile.lastSourceID
-        )
-        
-        // 仅在窗口未锁定且未继承 App 锁定时更新窗口的输入法
-        if !windowProfile.isLocked && !appProfile.isLocked {
-            windowProfile.lastSourceID = sourceID
-            windowProfile.windowTitle = context.windowTitle
-            windowProfile.lastUpdated = Date()
-        }
-        
         if effectiveGranularity == .field, context.isInputField, let fieldID = context.fieldID {
             let fieldIdentifier = context.fieldDescription ?? context.role ?? AppConstants.Accessibility.unknownFieldIdentifier
-            // 检查输入框是否为新创建：新创建的输入框继承上级窗口的输入法设置
-            let isNewField = windowProfile.fields[fieldID] == nil
-            var fieldProfile = windowProfile.fields[fieldID] ?? FieldProfile(
+            // 检查输入框是否为新创建：新创建的输入框继承上级 App 当前指定的输入法设置
+            var fieldProfile = appProfile.fields[fieldID] ?? FieldProfile(
                 id: fieldID,
                 fieldIdentifier: fieldIdentifier,
                 role: context.role ?? AppConstants.Accessibility.textFieldRole,
-                sourceID: windowProfile.lastSourceID
+                sourceID: appProfile.lastSourceID
             )
-            // 仅在输入框未锁定且未继承窗口/应用锁定时更新输入框的输入法
-            if !fieldProfile.isLocked && !windowProfile.isLocked && !appProfile.isLocked {
+            // 仅在输入框未锁定且未继承应用锁定时更新输入框的输入法
+            if !fieldProfile.isLocked && !appProfile.isLocked {
                 fieldProfile.sourceID = sourceID
                 fieldProfile.fieldIdentifier = fieldIdentifier
                 fieldProfile.lastUpdated = Date()
             }
-            windowProfile.fields[fieldID] = fieldProfile
+            appProfile.fields[fieldID] = fieldProfile
         }
         
-        appProfile.windows[context.windowID] = windowProfile
         profiles[context.bundleID] = appProfile
         
         lock.unlock()
@@ -263,7 +192,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             saveToDisk()
         }
         
-        // 遵循隔离原则：修改下级不覆盖上级，修改上级亦不覆盖下级已有设置
+        // 遵循隔离原则：修改 Field 绝不覆盖上级 App；修改 App 亦不覆盖已有 Field
         switch item.itemType {
         case .app(let bundleID, _, _):
             if var app = profiles[bundleID] {
@@ -271,21 +200,12 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                 app.lastUpdated = Date()
                 profiles[bundleID] = app
             }
-        case .window(let bundleID, let windowID):
-            if var app = profiles[bundleID], var win = app.windows[windowID] {
-                win.lastSourceID = newSourceID
-                win.lastUpdated = Date()
-                app.windows[windowID] = win
-                profiles[bundleID] = app
-            }
-        case .field(let bundleID, let windowID, let fieldID):
+        case .field(let bundleID, let fieldID):
             if var app = profiles[bundleID],
-               var win = app.windows[windowID],
-               var field = win.fields[fieldID] {
+               var field = app.fields[fieldID] {
                 field.sourceID = newSourceID
                 field.lastUpdated = Date()
-                win.fields[fieldID] = field
-                app.windows[windowID] = win
+                app.fields[fieldID] = field
                 profiles[bundleID] = app
             }
         }
@@ -301,15 +221,9 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         switch item.itemType {
         case .app(let bundleID, _, _):
             profiles.removeValue(forKey: bundleID)
-        case .window(let bundleID, let windowID):
+        case .field(let bundleID, let fieldID):
             if var app = profiles[bundleID] {
-                app.windows.removeValue(forKey: windowID)
-                profiles[bundleID] = app
-            }
-        case .field(let bundleID, let windowID, let fieldID):
-            if var app = profiles[bundleID], var win = app.windows[windowID] {
-                win.fields.removeValue(forKey: fieldID)
-                app.windows[windowID] = win
+                app.fields.removeValue(forKey: fieldID)
                 profiles[bundleID] = app
             }
         }
@@ -324,7 +238,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
     
     // MARK: - Cleaning Redundant Sub-Items
     
-    /// 清理指定应用下的下级记忆（根据粒度：若为 app 粒度，清理所有窗口和输入框；若为 window 粒度，清理所有窗口下的输入框）
+    /// 清理指定应用下的下级输入框记忆
     public func cleanSubItems(for bundleID: String, granularity: GranularityLevel) {
         lock.lock()
         defer {
@@ -336,30 +250,11 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         
         switch granularity {
         case .app:
-            app.windows.removeAll()
-            profiles[bundleID] = app
-        case .window:
-            for windowID in app.windows.keys {
-                app.windows[windowID]?.fields.removeAll()
-            }
+            app.fields.removeAll()
             profiles[bundleID] = app
         case .field:
             break
         }
-    }
-    
-    /// 清理指定窗口下的所有输入框记录
-    public func cleanFields(for bundleID: String, windowID: String) {
-        lock.lock()
-        defer {
-            lock.unlock()
-            saveToDisk()
-        }
-        
-        guard var app = profiles[bundleID], var win = app.windows[windowID] else { return }
-        win.fields.removeAll()
-        app.windows[windowID] = win
-        profiles[bundleID] = app
     }
     
     /// 根据层级项类型清理对应的下级冗余记录
@@ -367,14 +262,12 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         switch item.itemType {
         case .app(let bundleID, let granularity, _):
             cleanSubItems(for: bundleID, granularity: granularity)
-        case .window(let bundleID, let windowID):
-            cleanFields(for: bundleID, windowID: windowID)
         case .field:
             break
         }
     }
     
-    /// 根据每个 App 当前的生效粒度，全局清理所有冗余的下级记录（.app 粒度清理其窗口与输入框，.window 粒度清理其输入框）
+    /// 根据每个 App 当前的生效粒度，全局清理所有冗余的下级输入框记录
     public func cleanAllRedundantSubItems(granularityManager: GranularityManager) {
         lock.lock()
         defer {
@@ -387,12 +280,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             let gran = granularityManager.effectiveGranularity(for: bundleID, isBrowser: isBrowser)
             switch gran {
             case .app:
-                app.windows.removeAll()
-                profiles[bundleID] = app
-            case .window:
-                for windowID in app.windows.keys {
-                    app.windows[windowID]?.fields.removeAll()
-                }
+                app.fields.removeAll()
                 profiles[bundleID] = app
             case .field:
                 break
@@ -410,9 +298,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             let gran = granularityManager.effectiveGranularity(for: bundleID, isBrowser: isBrowser)
             switch gran {
             case .app:
-                if !app.windows.isEmpty { return true }
-            case .window:
-                if app.windows.values.contains(where: { !$0.fields.isEmpty }) { return true }
+                if !app.fields.isEmpty { return true }
             case .field:
                 break
             }
@@ -432,14 +318,9 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         switch effectiveGranularity {
         case .app:
             return false
-        case .window:
-            return appProfile.windows[context.windowID] == nil
         case .field:
-            guard let win = appProfile.windows[context.windowID] else {
-                return true
-            }
             if context.isInputField, let fieldID = context.fieldID {
-                return win.fields[fieldID] == nil
+                return appProfile.fields[fieldID] == nil
             }
             return false
         }
@@ -464,10 +345,10 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         var result: [HierarchyItem] = []
         let query = searchQuery?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         
-        // 应用程序排序：直接锁定的应用排在最前面，包含锁定窗口/输入框的应用居中，未锁定的排最后；同优先级按应用名字母排序
+        // 应用程序排序：直接锁定的应用排在最前面，包含锁定输入框的应用居中，未锁定的排最后；同优先级按应用名字母排序
         let sortedApps = profiles.values.sorted { lhs, rhs in
-            let lhsPriority = lhs.isLocked ? HierarchySortPriority.directlyLocked : (lhs.windows.values.contains { $0.isLocked || $0.fields.values.contains { $0.isLocked } } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
-            let rhsPriority = rhs.isLocked ? HierarchySortPriority.directlyLocked : (rhs.windows.values.contains { $0.isLocked || $0.fields.values.contains { $0.isLocked } } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
+            let lhsPriority = lhs.isLocked ? HierarchySortPriority.directlyLocked : (lhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
+            let rhsPriority = rhs.isLocked ? HierarchySortPriority.directlyLocked : (rhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
             if lhsPriority != rhsPriority {
                 return lhsPriority < rhsPriority
             }
@@ -475,101 +356,62 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
         
         for app in sortedApps {
-            let isBrowser = AppConstants.Browsers.knownBrowserBundleIDs.contains(app.id)
             let configuredGranularity = granularityManager.configuredGranularity(for: app.id)
             let displayGranularity = configuredGranularity ?? granularityManager.getGlobalDefault()
             
-            var windowItems: [HierarchyItem] = []
-            // 窗口排序：直接锁定的窗口置顶，包含锁定输入框的居中，未锁定的排后
-            let sortedWindows = app.windows.values.sorted { lhs, rhs in
-                let lhsPriority = lhs.isLocked ? HierarchySortPriority.directlyLocked : (lhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
-                let rhsPriority = rhs.isLocked ? HierarchySortPriority.directlyLocked : (rhs.fields.values.contains { $0.isLocked } ? HierarchySortPriority.partiallyLocked : HierarchySortPriority.unlocked)
+            var fieldItems: [HierarchyItem] = []
+            // 输入框排序：直接锁定的输入框置顶
+            let sortedFields = app.fields.values.sorted { lhs, rhs in
+                let lhsPriority = lhs.isLocked ? HierarchySortPriority.directlyLocked : HierarchySortPriority.unlocked
+                let rhsPriority = rhs.isLocked ? HierarchySortPriority.directlyLocked : HierarchySortPriority.unlocked
                 if lhsPriority != rhsPriority {
                     return lhsPriority < rhsPriority
                 }
-                return lhs.windowTitle.localizedStandardCompare(rhs.windowTitle) == .orderedAscending
+                return lhs.fieldIdentifier.localizedStandardCompare(rhs.fieldIdentifier) == .orderedAscending
             }
             
-            for win in sortedWindows {
-                var fieldItems: [HierarchyItem] = []
-                // 输入框排序：直接锁定的输入框置顶
-                let sortedFields = win.fields.values.sorted { lhs, rhs in
-                    let lhsPriority = lhs.isLocked ? HierarchySortPriority.directlyLocked : HierarchySortPriority.unlocked
-                    let rhsPriority = rhs.isLocked ? HierarchySortPriority.directlyLocked : HierarchySortPriority.unlocked
-                    if lhsPriority != rhsPriority {
-                        return lhsPriority < rhsPriority
-                    }
-                    return lhs.fieldIdentifier.localizedStandardCompare(rhs.fieldIdentifier) == .orderedAscending
-                }
-                
-                for field in sortedFields {
-                    // 输入框级锁定状态解析
-                    let fieldLockStatus: HierarchyItem.LockStatus
-                    if field.isLocked {
-                        fieldLockStatus = .locked(level: .field)
-                    } else if win.isLocked {
-                        fieldLockStatus = .inherited(from: .window)
-                    } else if app.isLocked {
-                        fieldLockStatus = .inherited(from: .app)
-                    } else {
-                        fieldLockStatus = .unlocked
-                    }
-                    
-                    let fieldItem = HierarchyItem(
-                        id: "field:\(app.id):\(win.id):\(field.id)",
-                        title: field.fieldIdentifier.isEmpty ? field.role : field.fieldIdentifier,
-                        subtitle: L10n.fieldRoleSubtitle(role: field.role),
-                        itemType: .field(bundleID: app.id, windowID: win.id, fieldID: field.id),
-                        currentSourceID: field.sourceID,
-                        isLocked: field.isLocked,
-                        lockStatus: fieldLockStatus
-                    )
-                    fieldItems.append(fieldItem)
-                }
-                
-                // 窗口级锁定状态解析
-                let winLockStatus: HierarchyItem.LockStatus
-                if win.isLocked {
-                    winLockStatus = .locked(level: .window)
+            for field in sortedFields {
+                // 输入框级锁定状态解析
+                let fieldLockStatus: HierarchyItem.LockStatus
+                if field.isLocked {
+                    fieldLockStatus = .locked(level: .field)
                 } else if app.isLocked {
-                    winLockStatus = .inherited(from: .app)
+                    fieldLockStatus = .inherited(from: .app)
                 } else {
-                    winLockStatus = .unlocked
+                    fieldLockStatus = .unlocked
                 }
                 
-                let winItem = HierarchyItem(
-                    id: "win:\(app.id):\(win.id)",
-                    title: win.windowTitle.isEmpty ? L10n.defaultWindowPlaceholder : win.windowTitle,
-                    subtitle: L10n.windowSubtitle(fieldCount: win.fields.count),
-                    itemType: .window(bundleID: app.id, windowID: win.id),
-                    currentSourceID: win.lastSourceID,
-                    isLocked: win.isLocked,
-                    lockStatus: winLockStatus,
-                    children: fieldItems.isEmpty ? nil : fieldItems
+                let fieldItem = HierarchyItem(
+                    id: "field:\(app.id):\(field.id)",
+                    title: field.fieldIdentifier.isEmpty ? field.role : field.fieldIdentifier,
+                    subtitle: L10n.fieldRoleSubtitle(role: field.role),
+                    itemType: .field(bundleID: app.id, fieldID: field.id),
+                    currentSourceID: field.sourceID,
+                    isLocked: field.isLocked,
+                    lockStatus: fieldLockStatus
                 )
-                windowItems.append(winItem)
+                fieldItems.append(fieldItem)
             }
             
-            let browserHint = isBrowser && displayGranularity == .field ? L10n.browserEnvironmentHint : ""
             let appLockStatus: HierarchyItem.LockStatus = app.isLocked ? .locked(level: .app) : .unlocked
             let nonInputPolicy = granularityManager.effectiveNonInputPolicy(for: app.id)
             
             let appItem = HierarchyItem(
                 id: "app:\(app.id)",
                 title: app.appName,
-                subtitle: "\(app.id)\(browserHint)",
+                subtitle: app.id,
                 itemType: .app(bundleID: app.id, granularity: displayGranularity, nonInputPolicy: nonInputPolicy),
                 currentSourceID: app.lastSourceID,
                 isLocked: app.isLocked,
                 lockStatus: appLockStatus,
-                children: windowItems.isEmpty ? nil : windowItems
+                children: fieldItems.isEmpty ? nil : fieldItems
             )
             
             // 搜索过滤逻辑
             if let query = query, !query.isEmpty {
                 let matchesApp = app.appName.lowercased().contains(query) || app.id.lowercased().contains(query)
-                let matchesWindow = windowItems.contains { $0.title.lowercased().contains(query) }
-                if matchesApp || matchesWindow {
+                let matchesField = fieldItems.contains { $0.title.lowercased().contains(query) }
+                if matchesApp || matchesField {
                     result.append(appItem)
                 }
             } else {
