@@ -203,6 +203,18 @@ public enum L10n {
         isChinese ? "设置该应用允许生效的最大追踪粒度" : "Set the maximum effective tracking granularity for this app"
     }
     
+    public static var nonInputPolicyHelp: String {
+        isChinese ? "设置该应用在焦点离开输入框时的输入法行为" : "Set input source behavior when focus is outside text fields for this app"
+    }
+    
+    public static var globalNonInputLabel: String {
+        isChinese ? "非输入行为:" : "Non-Input Action:"
+    }
+    
+    public static var globalNonInputHelp: String {
+        isChinese ? "设置全局默认在非输入框时是自动切为英文还是保持当前输入法" : "Global default behavior when focus is outside text fields"
+    }
+    
     // MARK: - Granularity Names & Descriptions
     public static func granularityName(for level: GranularityLevel) -> String {
         switch level {
@@ -229,6 +241,35 @@ public enum L10n {
             return isChinese
                 ? "精细记忆同窗口内的各个输入框，按控件独立切换"
                 : "Precisely remember each input field in a window and switch per control"
+        }
+    }
+    
+    // MARK: - Non-Input Policy Names & Descriptions
+    public static func nonInputPolicyName(for policy: NonInputPolicy) -> String {
+        switch policy {
+        case .followGlobal:
+            return isChinese ? "跟随全局 (Global)" : "Follow Global (Global)"
+        case .alwaysEnglish:
+            return isChinese ? "切为英文 (English)" : "Switch to English (English)"
+        case .exempt:
+            return isChinese ? "豁免保持 (Exempt)" : "Exempt (Keep Source)"
+        }
+    }
+    
+    public static func nonInputPolicyDetail(for policy: NonInputPolicy) -> String {
+        switch policy {
+        case .followGlobal:
+            return isChinese
+                ? "遵循全局默认配置（默认：非输入区自动切为英文）"
+                : "Follow global default configuration (default: switch to English outside inputs)"
+        case .alwaysEnglish:
+            return isChinese
+                ? "焦点离开输入框时立即自动切换为英文模式"
+                : "Immediately switch to English mode when focus is outside text fields"
+        case .exempt:
+            return isChinese
+                ? "豁免保护：非输入框不切英文，保护终端与绘图快捷键"
+                : "Exempt protection: Do not switch to English, preserving terminal or drawing flow"
         }
     }
     

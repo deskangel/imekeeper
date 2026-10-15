@@ -126,6 +126,22 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
+        // 关键前置判断：非输入框焦点行为策略判定
+        if !context.isInputField {
+            let policy = granularityManager.effectiveNonInputPolicy(for: context.bundleID)
+            switch policy {
+            case .exempt:
+                // 豁免（如终端软件或用户指定豁免）：不强切英文，也不记录脏数据，保持用户当前输入法
+                break
+            case .alwaysEnglish, .followGlobal:
+                // 性能极致优化：当前如果已经是英文模式，直接短路返回，零系统调用开销
+                if inputSourceManager.currentSource.id != AppConstants.InputSource.defaultAsciiSourceID {
+                    inputSourceManager.selectSource(id: AppConstants.InputSource.defaultAsciiSourceID)
+                }
+                return
+            }
+        }
+        
         // 解析该应用的有效生效粒度（浏览器强制截断为 Window 级）
         let effectiveGranularity = granularityManager.effectiveGranularity(
             for: context.bundleID,
@@ -164,6 +180,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
               !context.isSecureField,
               context.bundleID != Bundle.main.bundleIdentifier,
               context.bundleID != "com.antigravity.imekeeper" else { return }
+        
+        let isExemptApp = granularityManager.effectiveNonInputPolicy(for: context.bundleID) == .exempt
+        // 非输入框且非豁免应用：不将临时手动切换污染写入记忆库
+        guard context.isInputField || isExemptApp else { return }
         
         let effectiveGranularity = granularityManager.effectiveGranularity(
             for: context.bundleID,

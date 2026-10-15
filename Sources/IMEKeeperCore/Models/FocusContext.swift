@@ -29,6 +29,9 @@ public struct FocusContext: Codable, Equatable, Sendable {
     /// 是否为已知 Web 浏览器环境
     public let isBrowserApp: Bool
     
+    /// 当前聚焦元素是否为文本输入控件（若为按钮、列表、窗口空白等非输入控件则为 false）
+    public let isInputField: Bool
+    
     public init(
         bundleID: String,
         appName: String,
@@ -38,7 +41,8 @@ public struct FocusContext: Codable, Equatable, Sendable {
         fieldDescription: String? = nil,
         role: String? = nil,
         isSecureField: Bool = false,
-        isBrowserApp: Bool = false
+        isBrowserApp: Bool = false,
+        isInputField: Bool = true
     ) {
         self.bundleID = bundleID
         self.appName = appName
@@ -49,5 +53,6 @@ public struct FocusContext: Codable, Equatable, Sendable {
         self.role = role
         self.isSecureField = isSecureField
         self.isBrowserApp = isBrowserApp
+        self.isInputField = isInputField
     }
 }

@@ -28,7 +28,16 @@ public struct ElementFingerprinter: Sendable {
         // 2. 检查密码输入框 (Secure TextField)
         let isSecure = checkIsSecureField(element: element)
         
-        // 3. 浏览器场景决策：用户指定不深入网页内部，直接生成 Window 级上下文
+        // 3. 提取控件基础无障碍属性
+        let role = copyStringAttribute(element: element, attribute: kAXRoleAttribute as CFString)
+        let subrole = copyStringAttribute(element: element, attribute: kAXSubroleAttribute as CFString)
+        let identifier = copyStringAttribute(element: element, attribute: kAXIdentifierAttribute as CFString)
+        let description = copyStringAttribute(element: element, attribute: kAXDescriptionAttribute as CFString)
+        
+        // 4. 判定当前焦点是否处于可编辑输入框中
+        let isInput = determineIfInputField(element: element, role: role, subrole: subrole)
+        
+        // 5. 浏览器场景决策：用户指定不深入网页内部，保留 Window 级，但在 isInputField 标明真实状态
         if isBrowserApp {
             return FocusContext(
                 bundleID: bundleID,
@@ -37,25 +46,27 @@ public struct ElementFingerprinter: Sendable {
                 windowTitle: windowTitle,
                 fieldID: nil,
                 fieldDescription: nil,
-                role: AppConstants.Accessibility.webAreaRole,
+                role: role ?? AppConstants.Accessibility.webAreaRole,
                 isSecureField: isSecure,
-                isBrowserApp: true
+                isBrowserApp: true,
+                isInputField: isInput
             )
         }
         
-        // 4. 原生 App 场景：提取输入框复合指纹
-        let role = copyStringAttribute(element: element, attribute: kAXRoleAttribute as CFString)
-        let subrole = copyStringAttribute(element: element, attribute: kAXSubroleAttribute as CFString)
-        let identifier = copyStringAttribute(element: element, attribute: kAXIdentifierAttribute as CFString)
-        let description = copyStringAttribute(element: element, attribute: kAXDescriptionAttribute as CFString)
-        let title = copyStringAttribute(element: element, attribute: kAXTitleAttribute as CFString)
+        // 6. 原生 App 场景：提取输入框结构路径骨架（FINGERPRINT-V2）
+        let structuralPath = extractStructuralPath(from: element)
         
-        // 计算指纹哈希
-        let fingerprintSeed = "\(bundleID)|\(windowID)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")|\(description ?? "")|\(title ?? "")"
+        // 计算稳定的指纹哈希（彻底剥离易变的文档/工程动态标题污染）
+        let fingerprintSeed = "\(bundleID)|\(structuralPath)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")"
         let fieldID = computeSHA256(for: fingerprintSeed)
         
-        // 决定友好展示名称
-        let fieldDisplayDesc = identifier ?? description ?? title ?? role ?? AppConstants.Accessibility.unknownFieldIdentifier
+        // 决定友好展示名称（优先语义描述，避免将打开的临时文件当成输入框名）
+        let fieldDisplayDesc = determineFieldDisplayName(
+            identifier: identifier,
+            description: description,
+            role: role,
+            subrole: subrole
+        )
         
         return FocusContext(
             bundleID: bundleID,
@@ -66,8 +77,118 @@ public struct ElementFingerprinter: Sendable {
             fieldDescription: fieldDisplayDesc,
             role: role,
             isSecureField: isSecure,
-            isBrowserApp: false
+            isBrowserApp: false,
+            isInputField: isInput
         )
+    }
+    
+    // MARK: - Input Field Determination
+    
+    /// 判定目标无障碍元素是否具备文本输入能力
+    public func determineIfInputField(element: AXUIElement, role: String?, subrole: String?) -> Bool {
+        // 1. 明确的输入框角色白名单
+        let inputRoles: Set<String> = [
+            AppConstants.Accessibility.textFieldRole,
+            AppConstants.Accessibility.textAreaRole,
+            AppConstants.Accessibility.searchFieldRole,
+            AppConstants.Accessibility.comboBoxRole,
+            AppConstants.Accessibility.secureTextFieldRole
+        ]
+        if let role = role, inputRoles.contains(role) {
+            return true
+        }
+        
+        // 2. 明确的子角色白名单（例如富文本可编辑区、密码框）
+        if let subrole = subrole {
+            if subrole == AppConstants.Accessibility.contentEditableSubrole ||
+               subrole == AppConstants.Accessibility.secureTextFieldRole {
+                return true
+            }
+        }
+        
+        // 3. 动态属性能力探测：检查 kAXValueAttribute 是否可写入
+        var isSettable: DarwinBoolean = false
+        if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isSettable) == .success,
+           isSettable.boolValue {
+            return true
+        }
+        
+        // 4. 检查是否暴露了文本选区范围属性（仅光标编辑型控件响应）
+        var selectedRangeRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success {
+            return true
+        }
+        
+        return false
+    }
+    
+    // MARK: - Structural Path & Friendly Display
+    
+    private func extractStructuralPath(
+        from element: AXUIElement,
+        maxDepth: Int = AppConstants.Accessibility.maxHierarchyDepth
+    ) -> String {
+        var pathComponents: [String] = []
+        var current: AXUIElement = element
+        
+        for _ in 0..<maxDepth {
+            guard let role = copyStringAttribute(element: current, attribute: kAXRoleAttribute as CFString) else {
+                break
+            }
+            if role == (kAXWindowRole as String) || role == (kAXApplicationRole as String) {
+                pathComponents.append(role)
+                break
+            }
+            
+            let identifier = copyStringAttribute(element: current, attribute: kAXIdentifierAttribute as CFString)
+            if let id = identifier, !id.isEmpty, id.count <= 64, !id.contains("/") {
+                pathComponents.append("\(role)#\(id)")
+            } else {
+                pathComponents.append(role)
+            }
+            
+            var parentRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(current, kAXParentAttribute as CFString, &parentRef) == .success,
+               let parent = parentRef {
+                current = (parent as! AXUIElement)
+            } else {
+                break
+            }
+        }
+        
+        return pathComponents.reversed().joined(separator: "/")
+    }
+    
+    private func determineFieldDisplayName(
+        identifier: String?,
+        description: String?,
+        role: String?,
+        subrole: String?
+    ) -> String {
+        if let identifier = identifier, !identifier.isEmpty, identifier.count <= 64 {
+            return identifier
+        }
+        if let description = description, !description.isEmpty, description.count <= 48, !description.contains("\n") {
+            return description
+        }
+        if let subrole = subrole, subrole == AppConstants.Accessibility.secureTextFieldRole {
+            return "密码输入框 (AXSecureTextField)"
+        }
+        if let role = role {
+            switch role {
+            case AppConstants.Accessibility.textFieldRole:
+                return "单行文本框 (AXTextField)"
+            case AppConstants.Accessibility.textAreaRole:
+                return "多行文本区 (AXTextArea)"
+            case AppConstants.Accessibility.searchFieldRole:
+                return "搜索输入框 (AXSearchField)"
+            case AppConstants.Accessibility.comboBoxRole:
+                return "下拉组合框 (AXComboBox)"
+            default:
+                return role
+            }
+        }
+        return AppConstants.Accessibility.unknownFieldIdentifier
     }
     
     // MARK: - Private Attribute Extractors

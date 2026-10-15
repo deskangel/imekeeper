@@ -36,6 +36,21 @@ public enum AppConstants {
         public static let appLanguageStorageKey = "imekeeper_selected_language"
     }
     
+    /// 终端应用 Bundle ID 集合（内置豁免非输入框切英，整视口作为输入环境）
+    public enum Terminals {
+        public static let knownTerminalBundleIDs: Set<String> = [
+            "com.apple.Terminal",
+            "com.googlecode.iterm2",
+            "com.mitchellh.ghostty",
+            "org.alacritty",
+            "com.alacritty",
+            "net.kovidgoyal.kitty",
+            "com.github.wez.wezterm",
+            "dev.warp.Warp-Stable",
+            "co.zeit.hyper"
+        ]
+    }
+    
     /// 浏览器应用 Bundle ID 集合（对于这些应用，强制截断至 Window 级别，不解析深层 DOM 控件）
     public enum Browsers {
         public static let knownBrowserBundleIDs: Set<String> = [
@@ -60,12 +75,17 @@ public enum AppConstants {
         /// 申请辅助功能弹窗提示选项 Key
         public static let trustedCheckOptionPromptKey = "AXTrustedCheckOptionPrompt"
         
-        /// 安全输入（密码框）的角色标识
+        /// 输入框角色与子角色标识
         public static let secureTextFieldRole = "AXSecureTextField"
         public static let textFieldRole = "AXTextField"
         public static let textAreaRole = "AXTextArea"
         public static let searchFieldRole = "AXSearchField"
+        public static let comboBoxRole = "AXComboBox"
+        public static let contentEditableSubrole = "AXContentEditable"
         public static let webAreaRole = "AXWebArea"
+        
+        /// 结构指纹向上追溯最大深度
+        public static let maxHierarchyDepth: Int = 4
         
         /// 未知或默认占位名
         public static let unknownWindowIdentifier = "UnknownWindow"
@@ -80,9 +100,9 @@ public enum AppConstants {
     
     /// UI 布局与视图尺寸常量
     public enum UI {
-        public static let settingsWindowWidth: CGFloat = 860.0
+        public static let settingsWindowWidth: CGFloat = 920.0
         public static let settingsWindowHeight: CGFloat = 580.0
-        public static let minSettingsWindowWidth: CGFloat = 720.0
+        public static let minSettingsWindowWidth: CGFloat = 780.0
         public static let minSettingsWindowHeight: CGFloat = 460.0
         
         public static let treeRowHeight: CGFloat = 34.0
@@ -97,6 +117,7 @@ public enum AppConstants {
         public static let languagePickerWidth: CGFloat = 130.0
         public static let globalGranularityPickerWidth: CGFloat = 175.0
         public static let rowGranularityPickerWidth: CGFloat = 135.0
+        public static let rowNonInputPolicyPickerWidth: CGFloat = 135.0
         public static let rowInputSourcePickerWidth: CGFloat = 150.0
         public static let searchFieldWidth: CGFloat = 150.0
         public static let searchFieldCornerRadius: CGFloat = 6.0

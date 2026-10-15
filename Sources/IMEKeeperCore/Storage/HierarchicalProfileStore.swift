@@ -54,8 +54,24 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                    let fieldProfile = windowProfile.fields[fieldID] {
                     return fieldProfile.sourceID
                 }
+                // 若当前窗口未曾记录该输入框，但该 App 其他窗口已配置过相同结构指纹的输入框，跨窗口复用
+                if let fieldID = context.fieldID {
+                    for otherWin in appProfile.windows.values {
+                        if let fieldProfile = otherWin.fields[fieldID] {
+                            return fieldProfile.sourceID
+                        }
+                    }
+                }
                 // 用户决策：同窗口未曾记录过的全新输入框，默认继承窗口最后使用的输入法
                 return windowProfile.lastSourceID
+            }
+            // 若为全新窗口，优先匹配同 App 下已记录过的相同输入框指纹
+            if let fieldID = context.fieldID {
+                for otherWin in appProfile.windows.values {
+                    if let fieldProfile = otherWin.fields[fieldID] {
+                        return fieldProfile.sourceID
+                    }
+                }
             }
             return appProfile.lastSourceID
         }
@@ -154,7 +170,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
         
         switch item.itemType {
-        case .app(let bundleID, _):
+        case .app(let bundleID, _, _):
             if var app = profiles[bundleID] {
                 app.isLocked.toggle()
                 profiles[bundleID] = app
@@ -244,7 +260,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
         
         switch item.itemType {
-        case .app(let bundleID, _):
+        case .app(let bundleID, _, _):
             if var app = profiles[bundleID] {
                 app.lastSourceID = newSourceID
                 app.lastUpdated = Date()
@@ -301,7 +317,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
         
         switch item.itemType {
-        case .app(let bundleID, _):
+        case .app(let bundleID, _, _):
             profiles.removeValue(forKey: bundleID)
         case .window(let bundleID, let windowID):
             if var app = profiles[bundleID] {
@@ -431,12 +447,13 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             
             let browserHint = isBrowser && displayGranularity == .field ? L10n.browserEnvironmentHint : ""
             let appLockStatus: HierarchyItem.LockStatus = app.isLocked ? .locked(level: .app) : .unlocked
+            let nonInputPolicy = granularityManager.effectiveNonInputPolicy(for: app.id)
             
             let appItem = HierarchyItem(
                 id: "app:\(app.id)",
                 title: app.appName,
                 subtitle: "\(app.id)\(browserHint)",
-                itemType: .app(bundleID: app.id, granularity: displayGranularity),
+                itemType: .app(bundleID: app.id, granularity: displayGranularity, nonInputPolicy: nonInputPolicy),
                 currentSourceID: app.lastSourceID,
                 isLocked: app.isLocked,
                 lockStatus: appLockStatus,

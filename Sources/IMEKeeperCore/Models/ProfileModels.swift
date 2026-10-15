@@ -162,7 +162,7 @@ public struct AppProfile: Codable, Identifiable, Hashable, Sendable {
 /// 用于在 SwiftUI 设置界面树状列表中展示的通用层级项节点
 public struct HierarchyItem: Identifiable, Hashable, Sendable {
     public enum ItemType: Hashable, Sendable {
-        case app(bundleID: String, granularity: GranularityLevel)
+        case app(bundleID: String, granularity: GranularityLevel, nonInputPolicy: NonInputPolicy)
         case window(bundleID: String, windowID: String)
         case field(bundleID: String, windowID: String, fieldID: String)
     }

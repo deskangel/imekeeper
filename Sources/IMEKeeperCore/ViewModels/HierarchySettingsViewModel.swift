@@ -8,6 +8,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
     @Published public var hierarchyItems: [HierarchyItem] = []
     @Published public var availableSources: [InputSourceModel] = []
     @Published public var globalGranularity: GranularityLevel = .field
+    @Published public var globalNonInputPolicy: NonInputPolicy = .alwaysEnglish
     @Published public var searchQuery: String = "" {
         didSet {
             refreshTree()
@@ -39,6 +40,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
         self.autoStartManager = autoStartManager
         self.isAutoStartEnabled = autoStartManager.isAutoStartEnabled
         self.globalGranularity = granularityManager.getGlobalDefault()
+        self.globalNonInputPolicy = granularityManager.getGlobalNonInputDefault()
         self.availableSources = inputSourceManager.availableSources
         self.currentActiveSource = inputSourceManager.currentSource
         self.currentLanguage = LocalizationManager.shared.currentLanguage
@@ -70,7 +72,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
         
         // 预热所有包含的应用图标至内存缓存，避免在列表滚动时触发主线程磁盘 I/O 或系统 IPC
         let appBundleIDs = hierarchyItems.compactMap { item -> String? in
-            if case .app(let bundleID, _) = item.itemType {
+            if case .app(let bundleID, _, _) = item.itemType {
                 return bundleID
             }
             return nil
@@ -115,10 +117,33 @@ public final class HierarchySettingsViewModel: ObservableObject {
         granularityManager.configuredGranularity(for: bundleID)
     }
     
+    /// 设置某个 App 专属的非输入行为策略
+    public func setNonInputPolicy(for bundleID: String, policy: NonInputPolicy?) {
+        granularityManager.setNonInputPolicy(for: bundleID, policy: policy)
+        refreshTree()
+    }
+    
+    /// 获取某个 App 实际生效的非输入策略
+    public func effectiveNonInputPolicy(for bundleID: String) -> NonInputPolicy {
+        granularityManager.effectiveNonInputPolicy(for: bundleID)
+    }
+    
+    /// 获取某个 App 用户独立配置的非输入策略
+    public func configuredNonInputPolicy(for bundleID: String) -> NonInputPolicy? {
+        granularityManager.configuredNonInputPolicy(for: bundleID)
+    }
+    
     /// 设置全局生效默认粒度
     public func setGlobalGranularity(_ level: GranularityLevel) {
         granularityManager.setGlobalDefault(level)
         self.globalGranularity = level
+        refreshTree()
+    }
+    
+    /// 设置全局生效默认非输入行为策略
+    public func setGlobalNonInputPolicy(_ policy: NonInputPolicy) {
+        granularityManager.setGlobalNonInputDefault(policy)
+        self.globalNonInputPolicy = policy
         refreshTree()
     }
     

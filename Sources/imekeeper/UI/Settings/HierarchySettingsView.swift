@@ -78,6 +78,18 @@ public struct HierarchySettingsView: View {
             .pickerStyle(.menu)
             .frame(width: AppConstants.UI.globalGranularityPickerWidth)
             
+            // 全局非输入框行为
+            Picker(L10n.globalNonInputLabel, selection: Binding(
+                get: { viewModel.globalNonInputPolicy },
+                set: { viewModel.setGlobalNonInputPolicy($0) }
+            )) {
+                Text(L10n.nonInputPolicyName(for: .alwaysEnglish)).tag(NonInputPolicy.alwaysEnglish)
+                Text(L10n.nonInputPolicyName(for: .exempt)).tag(NonInputPolicy.exempt)
+            }
+            .pickerStyle(.menu)
+            .frame(width: AppConstants.UI.globalGranularityPickerWidth)
+            .help(L10n.globalNonInputHelp)
+            
             // 全局启用开关
             Toggle("", isOn: $viewModel.isEnabled)
                 .toggleStyle(.switch)
@@ -164,6 +176,9 @@ public struct HierarchySettingsView: View {
                         },
                         onChangeGranularity: { bundleID, newLevel in
                             viewModel.setGranularity(for: bundleID, level: newLevel)
+                        },
+                        onChangeNonInputPolicy: { bundleID, newPolicy in
+                            viewModel.setNonInputPolicy(for: bundleID, policy: newPolicy)
                         }
                     )
                     .equatable()
@@ -291,6 +306,7 @@ private struct HierarchyRowView: View, Equatable {
     let onToggleLock: () -> Void
     let onDelete: () -> Void
     let onChangeGranularity: (String, GranularityLevel?) -> Void
+    let onChangeNonInputPolicy: (String, NonInputPolicy) -> Void
     
     nonisolated static func == (lhs: HierarchyRowView, rhs: HierarchyRowView) -> Bool {
         lhs.isSelected == rhs.isSelected &&
@@ -337,9 +353,10 @@ private struct HierarchyRowView: View, Equatable {
             // 锁定控制按钮与状态
             lockControlButton
             
-            // 如果是 App 节点，提供生效粒度调节器
-            if case .app(let bundleID, let currentGranularity) = item.itemType {
+            // 如果是 App 节点，提供生效粒度调节器与非输入策略调节器
+            if case .app(let bundleID, let currentGranularity, let currentPolicy) = item.itemType {
                 granularityMenu(bundleID: bundleID, current: currentGranularity)
+                nonInputPolicyMenu(bundleID: bundleID, current: currentPolicy)
             }
             
             // 输入法选择器
@@ -453,7 +470,7 @@ private struct HierarchyRowView: View, Equatable {
     @ViewBuilder
     private var itemIcon: some View {
         switch item.itemType {
-        case .app(let bundleID, _):
+        case .app(let bundleID, _, _):
             AppRowIconView(bundleID: bundleID, iconSize: AppConstants.UI.appRowIconSize)
         case .window:
             Image(systemName: "macwindow")
@@ -501,6 +518,64 @@ private struct HierarchyRowView: View, Equatable {
         .menuStyle(.borderlessButton)
         .frame(width: AppConstants.UI.rowGranularityPickerWidth)
         .help(L10n.granularityHelp)
+    }
+    
+    private func nonInputPolicyMenu(bundleID: String, current: NonInputPolicy) -> some View {
+        Menu {
+            ForEach(NonInputPolicy.allCases) { policy in
+                Button {
+                    onChangeNonInputPolicy(bundleID, policy)
+                } label: {
+                    if policy == current {
+                        Label(L10n.nonInputPolicyName(for: policy), systemImage: "checkmark")
+                    } else {
+                        Text(L10n.nonInputPolicyName(for: policy))
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: AppConstants.UI.menuContentSpacing) {
+                Image(systemName: nonInputPolicyIcon(for: current))
+                    .font(.system(size: AppConstants.UI.menuFontSize))
+                    .foregroundColor(nonInputPolicyColor(for: current))
+                Text(L10n.nonInputPolicyName(for: current))
+                    .font(.system(size: AppConstants.UI.menuFontSize))
+                    .lineLimit(1)
+                Spacer(minLength: AppConstants.UI.menuSpacerMinLength)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: AppConstants.UI.menuChevronFontSize, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, AppConstants.UI.menuHorizontalPadding)
+            .frame(height: AppConstants.UI.menuControlHeight)
+            .background(
+                RoundedRectangle(cornerRadius: AppConstants.UI.menuCornerRadius)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppConstants.UI.menuCornerRadius)
+                    .stroke(Color.secondary.opacity(AppConstants.UI.menuBorderOpacity), lineWidth: AppConstants.UI.menuBorderLineWidth)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: AppConstants.UI.rowNonInputPolicyPickerWidth)
+        .help(L10n.nonInputPolicyDetail(for: current))
+    }
+    
+    private func nonInputPolicyIcon(for policy: NonInputPolicy) -> String {
+        switch policy {
+        case .followGlobal: return "globe"
+        case .alwaysEnglish: return "character"
+        case .exempt: return "shield.lefthalf.filled"
+        }
+    }
+    
+    private func nonInputPolicyColor(for policy: NonInputPolicy) -> Color {
+        switch policy {
+        case .followGlobal: return .secondary
+        case .alwaysEnglish: return .blue
+        case .exempt: return .orange
+        }
     }
     
     private var inputSourceMenu: some View {

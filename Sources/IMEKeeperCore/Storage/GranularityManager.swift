@@ -6,6 +6,8 @@ public final class GranularityManager: @unchecked Sendable {
     private let lock = NSLock()
     private var appGranularities: [String: GranularityLevel] = [:]
     private var globalDefault: GranularityLevel = .field
+    private var appNonInputPolicies: [String: NonInputPolicy] = [:]
+    private var globalNonInputDefault: NonInputPolicy = .alwaysEnglish
     private let storageURL: URL
     
     public init(customStorageURL: URL? = nil) {
@@ -81,11 +83,75 @@ public final class GranularityManager: @unchecked Sendable {
         return appGranularities
     }
     
+    // MARK: - Non-Input Policy Management
+    
+    /// 获取指定 Bundle ID 应用在非输入框焦点下的实际生效策略
+    public func effectiveNonInputPolicy(for bundleID: String) -> NonInputPolicy {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        if let configured = appNonInputPolicies[bundleID] {
+            if configured != .followGlobal {
+                return configured
+            }
+        }
+        
+        // 内置终端应用默认策略：豁免非输入区切英，保护终端键盘交互
+        if AppConstants.Terminals.knownTerminalBundleIDs.contains(bundleID) {
+            return .exempt
+        }
+        
+        return globalNonInputDefault
+    }
+    
+    /// 获取用户为特定 App 配置的非输入策略（若未配置则为 nil）
+    public func configuredNonInputPolicy(for bundleID: String) -> NonInputPolicy? {
+        lock.lock()
+        defer { lock.unlock() }
+        return appNonInputPolicies[bundleID]
+    }
+    
+    /// 设置特定 App 的非输入焦点策略
+    public func setNonInputPolicy(for bundleID: String, policy: NonInputPolicy?) {
+        lock.lock()
+        if let policy = policy {
+            appNonInputPolicies[bundleID] = policy
+        } else {
+            appNonInputPolicies.removeValue(forKey: bundleID)
+        }
+        lock.unlock()
+        saveToDisk()
+    }
+    
+    /// 获取全局默认的非输入焦点策略
+    public func getGlobalNonInputDefault() -> NonInputPolicy {
+        lock.lock()
+        defer { lock.unlock() }
+        return globalNonInputDefault
+    }
+    
+    /// 设置全局默认的非输入焦点策略
+    public func setGlobalNonInputDefault(_ policy: NonInputPolicy) {
+        lock.lock()
+        globalNonInputDefault = policy
+        lock.unlock()
+        saveToDisk()
+    }
+    
+    /// 获取所有配置了非输入策略的应用映射快照
+    public func getAllConfiguredNonInputPolicies() -> [String: NonInputPolicy] {
+        lock.lock()
+        defer { lock.unlock() }
+        return appNonInputPolicies
+    }
+    
     // MARK: - Persistence
     
     private struct PersistedGranularityData: Codable {
         let globalDefault: GranularityLevel
         let appGranularities: [String: GranularityLevel]
+        let globalNonInputDefault: NonInputPolicy?
+        let appNonInputPolicies: [String: NonInputPolicy]?
     }
     
     private func loadFromDisk() {
@@ -98,13 +164,21 @@ public final class GranularityManager: @unchecked Sendable {
         defer { lock.unlock() }
         self.globalDefault = decoded.globalDefault
         self.appGranularities = decoded.appGranularities
+        if let nonInputGlobal = decoded.globalNonInputDefault {
+            self.globalNonInputDefault = nonInputGlobal
+        }
+        if let nonInputApps = decoded.appNonInputPolicies {
+            self.appNonInputPolicies = nonInputApps
+        }
     }
     
     private func saveToDisk() {
         lock.lock()
         let dataToSave = PersistedGranularityData(
             globalDefault: globalDefault,
-            appGranularities: appGranularities
+            appGranularities: appGranularities,
+            globalNonInputDefault: globalNonInputDefault,
+            appNonInputPolicies: appNonInputPolicies
         )
         lock.unlock()
         
