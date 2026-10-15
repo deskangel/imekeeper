@@ -213,10 +213,12 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             appProfile.lastUpdated = Date()
         }
         
+        // 检查窗口是否为新创建：新创建的窗口继承上级 App 的输入法设置
+        let isNewWindow = appProfile.windows[context.windowID] == nil
         var windowProfile = appProfile.windows[context.windowID] ?? WindowProfile(
             id: context.windowID,
             windowTitle: context.windowTitle,
-            lastSourceID: sourceID
+            lastSourceID: appProfile.lastSourceID
         )
         
         // 仅在窗口未锁定且未继承 App 锁定时更新窗口的输入法
@@ -226,13 +228,15 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             windowProfile.lastUpdated = Date()
         }
         
-        if effectiveGranularity == .field, let fieldID = context.fieldID {
+        if effectiveGranularity == .field, context.isInputField, let fieldID = context.fieldID {
             let fieldIdentifier = context.fieldDescription ?? context.role ?? AppConstants.Accessibility.unknownFieldIdentifier
+            // 检查输入框是否为新创建：新创建的输入框继承上级窗口的输入法设置
+            let isNewField = windowProfile.fields[fieldID] == nil
             var fieldProfile = windowProfile.fields[fieldID] ?? FieldProfile(
                 id: fieldID,
                 fieldIdentifier: fieldIdentifier,
                 role: context.role ?? AppConstants.Accessibility.textFieldRole,
-                sourceID: sourceID
+                sourceID: windowProfile.lastSourceID
             )
             // 仅在输入框未锁定且未继承窗口/应用锁定时更新输入框的输入法
             if !fieldProfile.isLocked && !windowProfile.isLocked && !appProfile.isLocked {
@@ -259,36 +263,18 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             saveToDisk()
         }
         
+        // 遵循隔离原则：修改下级不覆盖上级，修改上级亦不覆盖下级已有设置
         switch item.itemType {
         case .app(let bundleID, _, _):
             if var app = profiles[bundleID] {
                 app.lastSourceID = newSourceID
                 app.lastUpdated = Date()
-                // 级联更新该应用下所有已记录的窗口与输入框
-                for (winID, var win) in app.windows {
-                    win.lastSourceID = newSourceID
-                    win.lastUpdated = Date()
-                    for (fieldID, var field) in win.fields {
-                        field.sourceID = newSourceID
-                        field.lastUpdated = Date()
-                        win.fields[fieldID] = field
-                    }
-                    app.windows[winID] = win
-                }
                 profiles[bundleID] = app
             }
         case .window(let bundleID, let windowID):
             if var app = profiles[bundleID], var win = app.windows[windowID] {
                 win.lastSourceID = newSourceID
                 win.lastUpdated = Date()
-                app.lastSourceID = newSourceID
-                app.lastUpdated = Date()
-                // 级联更新该窗口下所有已记录的输入框
-                for (fieldID, var field) in win.fields {
-                    field.sourceID = newSourceID
-                    field.lastUpdated = Date()
-                    win.fields[fieldID] = field
-                }
                 app.windows[windowID] = win
                 profiles[bundleID] = app
             }
@@ -298,10 +284,6 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
                var field = win.fields[fieldID] {
                 field.sourceID = newSourceID
                 field.lastUpdated = Date()
-                win.lastSourceID = newSourceID
-                win.lastUpdated = Date()
-                app.lastSourceID = newSourceID
-                app.lastUpdated = Date()
                 win.fields[fieldID] = field
                 app.windows[windowID] = win
                 profiles[bundleID] = app

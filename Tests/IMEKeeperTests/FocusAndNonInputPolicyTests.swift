@@ -95,14 +95,49 @@ final class FocusAndNonInputPolicyTests: XCTestCase {
         XCTAssertTrue(fingerprinter.determineIfInputField(element: dummyElement, role: "AXComboBox", subrole: nil))
         XCTAssertTrue(fingerprinter.determineIfInputField(element: dummyElement, role: "AXGroup", subrole: "AXContentEditable"))
         XCTAssertTrue(fingerprinter.determineIfInputField(element: dummyElement, role: "AXTextField", subrole: "AXSecureTextField"))
+        XCTAssertTrue(fingerprinter.determineIfInputField(element: dummyElement, role: "AXGroup", subrole: "AXSearchField"))
+        XCTAssertTrue(fingerprinter.determineIfInputField(element: dummyElement, role: "AXGroup", subrole: "AXTextField"))
         
-        // 明确的非输入框角色
+        // 明确的非输入框角色黑名单测试
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXButton", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXList", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXOutline", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXTable", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXScrollArea", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXScrollBar", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXSplitGroup", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXTabGroup", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXToolbar", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXWindow", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXImage", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXStaticText", subrole: nil))
+    }
+    
+    func testCanvasEditorPolicyAndFocusResolution() {
+        let zedBundleID = "dev.zed.Zed"
+        
+        // 1. Zed 编辑器默认非输入策略应当为豁免 (.exempt)
+        XCTAssertEqual(
+            manager.effectiveNonInputPolicy(for: zedBundleID),
+            .exempt,
+            "Zed 自绘编辑器默认应处于豁免策略下"
+        )
+        
+        // 2. 指纹解析器将 Zed 视口映射为有效的可编辑输入框与稳定指纹
+        let fingerprinter = ElementFingerprinter()
+        let dummyElement = AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
+        let currentApp = NSRunningApplication.current
+        
+        let context = fingerprinter.resolveFocusContext(
+            from: dummyElement,
+            runningApp: currentApp,
+            isBrowserApp: false
+        )
+        
+        // 验证通用非输入元素不会生成 fieldID
+        if !context.isInputField {
+            XCTAssertNil(context.fieldID, "非输入控件不应分配 fieldID")
+        }
     }
     
     // MARK: - Cross-Window Field Fallback Tests

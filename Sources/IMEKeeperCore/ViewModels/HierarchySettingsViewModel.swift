@@ -107,6 +107,9 @@ public final class HierarchySettingsViewModel: ObservableObject {
     /// 设置某个 App 专属生效粒度
     public func setGranularity(for bundleID: String, level: GranularityLevel?) {
         granularityManager.setGranularity(for: bundleID, level: level)
+        if level == .field || level == .window {
+            expandedItemIDs.insert("app:\(bundleID)")
+        }
         refreshTree()
     }
     

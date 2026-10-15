@@ -31,15 +31,19 @@ public final class GranularityManager: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         
-        let configured = appGranularities[bundleID] ?? globalDefault
+        let configured = appGranularities[bundleID]
         
-        // 浏览器特殊约束：不深入 Web 内部，最高允许到 .window 级
+        // 浏览器策略：
+        // 1. 若用户针对该浏览器显式单独配置过（如用户特意选了 .field 或 .app），则尊重用户的显式配置
+        // 2. 若用户未独立配置，跟随全局默认时，若全局默认是 .field 则自动对浏览器保护截断至 .window
         if isBrowser {
-            if configured == .field {
-                return .window
+            if let userConfigured = configured {
+                return userConfigured
             }
+            return globalDefault == .field ? .window : globalDefault
         }
-        return configured
+        
+        return configured ?? globalDefault
     }
     
     /// 获取指定 App 是否有独立配置过粒度（否则为 nil，代表跟随默认）
@@ -96,8 +100,9 @@ public final class GranularityManager: @unchecked Sendable {
             }
         }
         
-        // 内置终端应用默认策略：豁免非输入区切英，保护终端键盘交互
-        if AppConstants.Terminals.knownTerminalBundleIDs.contains(bundleID) {
+        // 内置终端应用与自绘型代码编辑器默认策略：豁免非输入区切英，保护键盘交互
+        if AppConstants.Terminals.knownTerminalBundleIDs.contains(bundleID) ||
+           AppConstants.CanvasEditors.knownCanvasEditorBundleIDs.contains(bundleID) {
             return .exempt
         }
         

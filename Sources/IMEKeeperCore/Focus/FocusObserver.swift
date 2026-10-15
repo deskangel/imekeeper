@@ -89,6 +89,20 @@ public final class FocusObserver: @unchecked Sendable {
         detachCurrentObserver()
         
         let appElement = AXUIElementCreateApplication(pid)
+        
+        // 关键增强：为 Chromium / Electron 应用（如 VS Code、Antigravity IDE、Slack 等）激活无障碍树，
+        // 否则内核默认不构建可编辑控件无障碍节点，也不会派发输入框焦点变化通知
+        AXUIElementSetAttributeValue(
+            appElement,
+            AppConstants.Accessibility.manualAccessibilityAttribute as CFString,
+            kCFBooleanTrue
+        )
+        AXUIElementSetAttributeValue(
+            appElement,
+            AppConstants.Accessibility.enhancedUserInterfaceAttribute as CFString,
+            kCFBooleanTrue
+        )
+        
         var observerRef: AXObserver?
         
         let axCallback: AXObserverCallback = { observer, element, notificationName, refcon in
@@ -138,7 +152,18 @@ public final class FocusObserver: @unchecked Sendable {
     
     private func handleAXNotification(element: AXUIElement, notification: String) {
         guard let runningApp = NSRunningApplication(processIdentifier: currentPid) else { return }
-        scheduleFocusResolution(element: element, runningApp: runningApp)
+        
+        // 关键时序优化：若接收到的是窗口切换通知，优先探查应用内当前实际聚焦的输入控件，避免窗口元素覆盖输入框
+        var targetElement = element
+        if notification == (kAXFocusedWindowChangedNotification as String), let appElement = currentAppElement {
+            var focusedRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+               let focused = focusedRef {
+                targetElement = (focused as! AXUIElement)
+            }
+        }
+        
+        scheduleFocusResolution(element: targetElement, runningApp: runningApp)
     }
     
     private func probeCurrentElementDirectly(for app: NSRunningApplication, appElement: AXUIElement) {
@@ -168,11 +193,23 @@ public final class FocusObserver: @unchecked Sendable {
         let bundleID = runningApp.bundleIdentifier ?? ""
         let isBrowser = browserDetector.isBrowser(bundleID: bundleID)
         let handler = onFocusChangedHandler
+        let appElement = currentAppElement
         
         let workItem = DispatchWorkItem { [weak self] in
             guard let self = self else { return }
+            
+            // 防抖截止执行时，再次确认应用当前的精准焦点元素，防止窗口切换过渡期的瞬态状态污染
+            var targetElement = element
+            if let app = appElement {
+                var focusedRef: CFTypeRef?
+                if AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
+                   let focused = focusedRef {
+                    targetElement = (focused as! AXUIElement)
+                }
+            }
+            
             let context = self.fingerprinter.resolveFocusContext(
-                from: element,
+                from: targetElement,
                 runningApp: runningApp,
                 isBrowserApp: isBrowser
             )

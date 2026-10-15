@@ -33,40 +33,53 @@ public struct ElementFingerprinter: Sendable {
         let subrole = copyStringAttribute(element: element, attribute: kAXSubroleAttribute as CFString)
         let identifier = copyStringAttribute(element: element, attribute: kAXIdentifierAttribute as CFString)
         let description = copyStringAttribute(element: element, attribute: kAXDescriptionAttribute as CFString)
+        let title = copyStringAttribute(element: element, attribute: kAXTitleAttribute as CFString)
         
-        // 4. 判定当前焦点是否处于可编辑输入框中
-        let isInput = determineIfInputField(element: element, role: role, subrole: subrole)
+        // 4. 特殊自绘型编辑器（如 Zed）：整视口视为输入区域
+        let isCanvasEditor = AppConstants.CanvasEditors.knownCanvasEditorBundleIDs.contains(bundleID)
         
-        // 5. 浏览器场景决策：用户指定不深入网页内部，保留 Window 级，但在 isInputField 标明真实状态
-        if isBrowserApp {
+        // 5. 判定当前焦点是否处于可编辑输入框中
+        let isInput: Bool
+        if isCanvasEditor {
+            isInput = true
+        } else {
+            isInput = determineIfInputField(element: element, role: role, subrole: subrole)
+        }
+        
+        // 6. Zed 等自绘编辑器：生成稳定且友好的虚拟编辑区指纹
+        if isCanvasEditor {
+            let fieldSeed = "\(bundleID)|\(AppConstants.Accessibility.canvasEditorFieldSeed)"
+            let fieldID = computeSHA256(for: fieldSeed)
             return FocusContext(
                 bundleID: bundleID,
                 appName: appName,
                 windowID: windowID,
                 windowTitle: windowTitle,
-                fieldID: nil,
-                fieldDescription: nil,
-                role: role ?? AppConstants.Accessibility.webAreaRole,
-                isSecureField: isSecure,
-                isBrowserApp: true,
-                isInputField: isInput
+                fieldID: fieldID,
+                fieldDescription: AppConstants.Accessibility.canvasEditorFieldDescription,
+                role: AppConstants.Accessibility.textAreaRole,
+                isSecureField: false,
+                isBrowserApp: false,
+                isInputField: true
             )
         }
         
-        // 6. 原生 App 场景：提取输入框结构路径骨架（FINGERPRINT-V2）
+        // 7. 提取输入框结构路径骨架（FINGERPRINT-V2）
         let structuralPath = extractStructuralPath(from: element)
         
-        // 计算稳定的指纹哈希（彻底剥离易变的文档/工程动态标题污染）
-        let fingerprintSeed = "\(bundleID)|\(structuralPath)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")"
-        let fieldID = computeSHA256(for: fingerprintSeed)
+        // 计算稳定的指纹哈希（混合结构路径、角色、标识与描述，区分同窗口不同输入组件）
+        let fingerprintSeed = "\(bundleID)|\(structuralPath)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")|\(description ?? "")"
+        let fieldID = isInput ? computeSHA256(for: fingerprintSeed) : nil
         
-        // 决定友好展示名称（优先语义描述，避免将打开的临时文件当成输入框名）
-        let fieldDisplayDesc = determineFieldDisplayName(
+        // 决定友好展示名称（优先语义描述，识别 IDE 编辑器、对话框、搜索栏等）
+        let fieldDisplayDesc = isInput ? determineFieldDisplayName(
             identifier: identifier,
             description: description,
+            title: title,
+            structuralPath: structuralPath,
             role: role,
             subrole: subrole
-        )
+        ) : nil
         
         return FocusContext(
             bundleID: bundleID,
@@ -75,9 +88,9 @@ public struct ElementFingerprinter: Sendable {
             windowTitle: windowTitle,
             fieldID: fieldID,
             fieldDescription: fieldDisplayDesc,
-            role: role,
+            role: role ?? (isBrowserApp ? AppConstants.Accessibility.webAreaRole : nil),
             isSecureField: isSecure,
-            isBrowserApp: false,
+            isBrowserApp: isBrowserApp,
             isInputField: isInput
         )
     }
@@ -86,6 +99,11 @@ public struct ElementFingerprinter: Sendable {
     
     /// 判定目标无障碍元素是否具备文本输入能力
     public func determineIfInputField(element: AXUIElement, role: String?, subrole: String?) -> Bool {
+        // 0. 明确的非输入框角色黑名单（优先排除大纲、列表、表格、按钮等容器）
+        if let role = role, AppConstants.Accessibility.nonInputRoles.contains(role) {
+            return false
+        }
+        
         // 1. 明确的输入框角色白名单
         let inputRoles: Set<String> = [
             AppConstants.Accessibility.textFieldRole,
@@ -98,24 +116,24 @@ public struct ElementFingerprinter: Sendable {
             return true
         }
         
-        // 2. 明确的子角色白名单（例如富文本可编辑区、密码框）
+        // 2. 明确的子角色白名单（例如富文本可编辑区、密码框、及子角色标明为输入框者）
         if let subrole = subrole {
             if subrole == AppConstants.Accessibility.contentEditableSubrole ||
-               subrole == AppConstants.Accessibility.secureTextFieldRole {
+               subrole == AppConstants.Accessibility.secureTextFieldRole ||
+               inputRoles.contains(subrole) {
                 return true
             }
         }
         
-        // 3. 动态属性能力探测：检查 kAXValueAttribute 是否可写入
-        var isSettable: DarwinBoolean = false
-        if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isSettable) == .success,
-           isSettable.boolValue {
+        // 3. 检查是否暴露了文本选区范围属性（仅光标编辑型控件响应）
+        var selectedRangeRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success {
             return true
         }
         
-        // 4. 检查是否暴露了文本选区范围属性（仅光标编辑型控件响应）
-        var selectedRangeRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success {
+        // 4. 检查是否暴露了光标行号属性（代码编辑器与复杂文本框的关键特性）
+        var insertionPointRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXInsertionPointLineNumberAttribute as CFString, &insertionPointRef) == .success {
             return true
         }
         
@@ -141,7 +159,7 @@ public struct ElementFingerprinter: Sendable {
             }
             
             let identifier = copyStringAttribute(element: current, attribute: kAXIdentifierAttribute as CFString)
-            if let id = identifier, !id.isEmpty, id.count <= 64, !id.contains("/") {
+            if let id = identifier, !id.isEmpty, id.count <= AppConstants.Accessibility.maxIdentifierLength, !id.contains("/") {
                 pathComponents.append("\(role)#\(id)")
             } else {
                 pathComponents.append(role)
@@ -162,15 +180,40 @@ public struct ElementFingerprinter: Sendable {
     private func determineFieldDisplayName(
         identifier: String?,
         description: String?,
+        title: String?,
+        structuralPath: String,
         role: String?,
         subrole: String?
     ) -> String {
-        if let identifier = identifier, !identifier.isEmpty, identifier.count <= 64 {
+        // 1. 结构路径语义匹配（针对 VS Code / Antigravity 等 Electron IDE）
+        let lowerPath = structuralPath.lowercased()
+        if lowerPath.contains("parts.editor") {
+            return "代码编辑区 (Editor)"
+        }
+        if lowerPath.contains("chat") || lowerPath.contains("auxiliarybar") {
+            return "AI 对话输入 (Chat)"
+        }
+        if lowerPath.contains("terminal") {
+            return "内置终端 (Terminal)"
+        }
+        if lowerPath.contains("find") {
+            return "查找与替换 (Find)"
+        }
+        
+        // 2. 显式 identifier 语义识别
+        if let identifier = identifier, !identifier.isEmpty, identifier.count <= AppConstants.Accessibility.maxIdentifierLength {
             return identifier
         }
-        if let description = description, !description.isEmpty, description.count <= 48, !description.contains("\n") {
+        
+        // 3. description / title 识别
+        if let description = description, !description.isEmpty, description.count <= AppConstants.Accessibility.maxDescriptionLength, !description.contains("\n") {
             return description
         }
+        if let title = title, !title.isEmpty, title.count <= AppConstants.Accessibility.maxDescriptionLength, !title.contains("\n") {
+            return title
+        }
+        
+        // 4. 角色与子角色
         if let subrole = subrole, subrole == AppConstants.Accessibility.secureTextFieldRole {
             return "密码输入框 (AXSecureTextField)"
         }
@@ -196,12 +239,21 @@ public struct ElementFingerprinter: Sendable {
     private func extractWindowInfo(from element: AXUIElement) -> (windowID: String, windowTitle: String) {
         var current: AXUIElement = element
         
-        // 向上查找 AXWindow 节点
-        for _ in 0..<8 {
+        // 向上深度查找 AXWindow 节点，穿透深层 DOM/SwiftUI/Electron 控件层级
+        for _ in 0..<AppConstants.Accessibility.maxWindowSearchDepth {
             if let role = copyStringAttribute(element: current, attribute: kAXRoleAttribute as CFString),
                role == kAXWindowRole as String {
                 let title = copyStringAttribute(element: current, attribute: kAXTitleAttribute as CFString) ?? AppConstants.Accessibility.defaultWindowPlaceholder
                 let identifier = copyStringAttribute(element: current, attribute: kAXIdentifierAttribute as CFString) ?? ""
+                
+                // 优先读取 _AXWindowNumber 获得稳定的窗口系统级唯一标识
+                var winNumberRef: CFTypeRef?
+                if AXUIElementCopyAttributeValue(current, AppConstants.Accessibility.windowNumberAttribute as CFString, &winNumberRef) == .success,
+                   let winNumber = winNumberRef {
+                    let winID = computeSHA256(for: "win_num_\(winNumber)")
+                    return (winID, title)
+                }
+                
                 let winID = computeSHA256(for: "\(title)|\(identifier)")
                 return (winID, title)
             }
@@ -221,6 +273,14 @@ public struct ElementFingerprinter: Sendable {
            let win = windowRef {
             let winElement = (win as! AXUIElement)
             let title = copyStringAttribute(element: winElement, attribute: kAXTitleAttribute as CFString) ?? AppConstants.Accessibility.defaultWindowPlaceholder
+            
+            var winNumberRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(winElement, AppConstants.Accessibility.windowNumberAttribute as CFString, &winNumberRef) == .success,
+               let winNumber = winNumberRef {
+                let winID = computeSHA256(for: "win_num_\(winNumber)")
+                return (winID, title)
+            }
+            
             let winID = computeSHA256(for: title)
             return (winID, title)
         }

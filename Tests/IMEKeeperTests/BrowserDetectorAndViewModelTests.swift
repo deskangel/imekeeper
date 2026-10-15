@@ -220,4 +220,50 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
         try? FileManager.default.removeItem(at: storeURL)
         try? FileManager.default.removeItem(at: granURL)
     }
+    
+    @MainActor
+    func testViewModelSetGranularityAutoExpandsNode() {
+        let tempDir = FileManager.default.temporaryDirectory
+        let storeURL = tempDir.appendingPathComponent("vm_test_expand_\(UUID().uuidString).json")
+        let granURL = tempDir.appendingPathComponent("vm_test_gran_expand_\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: storeURL)
+            try? FileManager.default.removeItem(at: granURL)
+        }
+        
+        let store = HierarchicalProfileStore(customStorageURL: storeURL)
+        let granManager = GranularityManager(customStorageURL: granURL)
+        let mockManager = MockInputSourceManager()
+        
+        let appBundleID = "com.google.antigravity-ide"
+        let context = FocusContext(
+            bundleID: appBundleID,
+            appName: "Antigravity IDE",
+            windowID: "win-1",
+            windowTitle: "Main"
+        )
+        store.record(context: context, sourceID: "com.apple.keylayout.ABC", effectiveGranularity: .app)
+        
+        let viewModel = HierarchySettingsViewModel(
+            store: store,
+            granularityManager: granManager,
+            inputSourceManager: mockManager
+        )
+        
+        let appNodeID = "app:\(appBundleID)"
+        XCTAssertFalse(viewModel.isExpanded(appNodeID))
+        
+        // 当用户将该 App 的粒度设为 .field 时，应当自动展开该应用节点
+        viewModel.setGranularity(for: appBundleID, level: .field)
+        XCTAssertTrue(viewModel.isExpanded(appNodeID))
+        
+        // 当用户将粒度设为 .app 时，维持已有状态
+        viewModel.setExpanded(appNodeID, isExpanded: false)
+        viewModel.setGranularity(for: appBundleID, level: .app)
+        XCTAssertFalse(viewModel.isExpanded(appNodeID))
+        
+        // 设为 .window 粒度时同样自动展开
+        viewModel.setGranularity(for: appBundleID, level: .window)
+        XCTAssertTrue(viewModel.isExpanded(appNodeID))
+    }
 }

@@ -46,16 +46,16 @@ final class GranularityManagerTests: XCTestCase {
         let safariBundleID = "com.apple.Safari"
         let chromeBundleID = "com.google.Chrome"
         
-        // 全局默认是 .field 级，但当 isBrowser 为 true 时，系统必须强制限制在 .window 级
+        // 全局默认是 .field 级，但当 isBrowser 为 true 且未独立配置时，系统自动保护限制在 .window 级
         XCTAssertEqual(manager.effectiveGranularity(for: safariBundleID, isBrowser: true), .window)
         XCTAssertEqual(manager.effectiveGranularity(for: chromeBundleID, isBrowser: true), .window)
         
-        // 如果用户特意将浏览器降低为 .app 级，则允许 .app
+        // 如果用户特意将浏览器配置为 .app 级，则允许 .app
         manager.setGranularity(for: safariBundleID, level: .app)
         XCTAssertEqual(manager.effectiveGranularity(for: safariBundleID, isBrowser: true), .app)
         
-        // 如果用户误将浏览器配置为 .field 级，浏览器约束应依然自动截断为 .window 级
+        // 如果用户显式将浏览器配置为 .field 级，系统尊重用户的独立配置
         manager.setGranularity(for: safariBundleID, level: .field)
-        XCTAssertEqual(manager.effectiveGranularity(for: safariBundleID, isBrowser: true), .window)
+        XCTAssertEqual(manager.effectiveGranularity(for: safariBundleID, isBrowser: true), .field)
     }
 }

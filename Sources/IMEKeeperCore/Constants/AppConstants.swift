@@ -54,7 +54,14 @@ public enum AppConstants {
         ]
     }
     
-    /// 浏览器应用 Bundle ID 集合（对于这些应用，强制截断至 Window 级别，不解析深层 DOM 控件）
+    /// 纯 GPU 自绘型编辑器应用集合（如 Zed，整视口作为输入环境）
+    public enum CanvasEditors {
+        public static let knownCanvasEditorBundleIDs: Set<String> = [
+            "dev.zed.Zed"
+        ]
+    }
+    
+    /// 浏览器应用 Bundle ID 集合（对于这些应用，默认跟随限制至 Window 级别）
     public enum Browsers {
         public static let knownBrowserBundleIDs: Set<String> = [
             "com.apple.Safari",
@@ -87,8 +94,48 @@ public enum AppConstants {
         public static let contentEditableSubrole = "AXContentEditable"
         public static let webAreaRole = "AXWebArea"
         
-        /// 结构指纹向上追溯最大深度
-        public static let maxHierarchyDepth: Int = 4
+        /// 明确排除的非输入框角色集合（防止容器、列表或大纲被误判为输入框）
+        public static let nonInputRoles: Set<String> = [
+            "AXOutline",
+            "AXTable",
+            "AXList",
+            "AXButton",
+            "AXScrollArea",
+            "AXScrollBar",
+            "AXSplitGroup",
+            "AXTabGroup",
+            "AXToolbar",
+            "AXMenuBar",
+            "AXMenu",
+            "AXMenuItem",
+            "AXImage",
+            "AXStaticText",
+            "AXHeading",
+            "AXLink",
+            "AXWindow",
+            "AXApplication"
+        ]
+        
+        /// 窗口底层固定编号属性（私有但广泛支持，确保浏览器/文档窗口哈希稳定）
+        public static let windowNumberAttribute = "_AXWindowNumber"
+        
+        /// 自绘编辑器（如 Zed）的虚拟指纹标识与显示名
+        public static let canvasEditorFieldSeed = "CanvasMainEditorArea"
+        public static let canvasEditorFieldDescription = "代码编辑区 (Editor)"
+        
+        /// 结构指纹向上追溯最大深度（深入识别 Electron/IDE 工作区容器组件）
+        public static let maxHierarchyDepth: Int = 16
+        
+        /// 针对 Electron / Chromium 及 WebKit 应用强制开启无障碍树的属性
+        public static let manualAccessibilityAttribute = "AXManualAccessibility"
+        public static let enhancedUserInterfaceAttribute = "AXEnhancedUserInterface"
+        
+        /// 向上查找 AXWindow 节点的最大深度
+        public static let maxWindowSearchDepth: Int = 32
+        
+        /// 控件标识符与描述文本的最大长度限制
+        public static let maxIdentifierLength: Int = 64
+        public static let maxDescriptionLength: Int = 48
         
         /// 未知或默认占位名
         public static let unknownWindowIdentifier = "UnknownWindow"
