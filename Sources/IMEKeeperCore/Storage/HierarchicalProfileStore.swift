@@ -270,13 +270,16 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
         
         guard var app = profiles[bundleID] else { return }
+        // 处于锁定状态的 App 受严格保护，下级记录无法被清理
+        guard !app.isLocked else { return }
         
         switch granularity {
         case .app:
             app.fields.removeAll()
             profiles[bundleID] = app
         case .field:
-            break
+            app.fields = app.fields.filter { $0.value.isLocked }
+            profiles[bundleID] = app
         }
     }
     
@@ -290,7 +293,7 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
     }
     
-    /// 根据每个 App 当前的生效粒度，全局清理所有冗余的下级输入框记录
+    /// 根据每个 App 当前的生效粒度与锁定状态，全局清理所有可清理的下级输入框记录
     public func cleanAllRedundantSubItems(granularityManager: GranularityManager) {
         lock.lock()
         defer {
@@ -299,31 +302,36 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         }
         
         for (bundleID, var app) in profiles {
-            let isBrowser = AppConstants.Browsers.knownBrowserBundleIDs.contains(bundleID)
-            let gran = granularityManager.effectiveGranularity(for: bundleID, isBrowser: isBrowser)
+            // 处于锁定状态的 App 受严格保护，直接跳过
+            guard !app.isLocked else { continue }
+            
+            let gran = granularityManager.effectiveGranularity(for: bundleID)
             switch gran {
             case .app:
                 app.fields.removeAll()
                 profiles[bundleID] = app
             case .field:
-                break
+                app.fields = app.fields.filter { $0.value.isLocked }
+                profiles[bundleID] = app
             }
         }
     }
     
-    /// 检查全局是否存在任何不符合当前生效粒度的冗余下级记录
+    /// 检查全局是否存在任何符合当前规则的可清理下级记录
     public func hasAnyRedundantSubItems(granularityManager: GranularityManager) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         
         for (bundleID, app) in profiles {
-            let isBrowser = AppConstants.Browsers.knownBrowserBundleIDs.contains(bundleID)
-            let gran = granularityManager.effectiveGranularity(for: bundleID, isBrowser: isBrowser)
+            // 处于锁定状态的 App 受保护，不计入可清理记录
+            guard !app.isLocked else { continue }
+            
+            let gran = granularityManager.effectiveGranularity(for: bundleID)
             switch gran {
             case .app:
                 if !app.fields.isEmpty { return true }
             case .field:
-                break
+                if app.fields.values.contains(where: { !$0.isLocked }) { return true }
             }
         }
         return false

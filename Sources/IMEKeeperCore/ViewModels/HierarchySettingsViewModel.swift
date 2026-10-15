@@ -174,22 +174,42 @@ public final class HierarchySettingsViewModel: ObservableObject {
         refreshTree()
     }
     
-    /// 清理指定层级项的下级记录（App 粒度下清理其所有输入框记录）
+    /// 清理指定层级项的下级记录（App 粒度下清理其所有输入框记录；Field 粒度下清理未锁定输入框记录）
     public func cleanItem(_ item: HierarchyItem) {
         store.clean(item: item)
         refreshTree()
+        sanitizeSelectionAfterClean()
     }
     
     /// 清理指定应用下的下级记忆（根据生效粒度）
     public func cleanSubItems(for bundleID: String, granularity: GranularityLevel) {
         store.cleanSubItems(for: bundleID, granularity: granularity)
         refreshTree()
+        sanitizeSelectionAfterClean()
     }
     
-    /// 全局清理所有应用下不符合当前生效粒度的冗余下级记录
+    /// 全局清理所有应用下可清理的冗余或历史输入框记录
     public func cleanAllRedundantSubItems() {
         store.cleanAllRedundantSubItems(granularityManager: granularityManager)
         refreshTree()
+        sanitizeSelectionAfterClean()
+    }
+    
+    /// 清理操作后校正选区，若原先选中的输入框已被清理，回退至所属 App 节点
+    private func sanitizeSelectionAfterClean() {
+        guard let selected = selectedItemID, selected.hasPrefix("field:") else { return }
+        let exists = hierarchyItems.contains { appItem in
+            appItem.children?.contains { $0.id == selected } == true
+        }
+        if !exists {
+            let parts = selected.split(separator: ":", maxSplits: 2)
+            if parts.count >= 2 {
+                let bundleID = String(parts[1])
+                self.selectedItemID = "app:\(bundleID)"
+            } else {
+                self.selectedItemID = nil
+            }
+        }
     }
     
     /// 是否存在任何可全局清理的冗余记录

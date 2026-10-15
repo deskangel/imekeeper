@@ -211,6 +211,20 @@ public enum L10n {
         isChinese ? "无待清理的下级记录" : "No sub-items to clean"
     }
     
+    public static var lockedAppCannotCleanHelp: String {
+        isChinese
+            ? "应用已锁定，下级记录受保护无法清理，请先解锁应用"
+            : "App is locked; sub-items are protected and cannot be cleaned. Unlock app first"
+    }
+    
+    public static var cleanUnlockedFieldsHelp: String {
+        isChinese ? "清理此应用下未锁定的输入框记录" : "Clean unlocked fields in this app"
+    }
+    
+    public static var noUnlockedFieldsToCleanHelp: String {
+        isChinese ? "无待清理的未锁定输入框记录" : "No unlocked fields to clean"
+    }
+    
     public static var fieldLevelNoCleanNeededHelp: String {
         isChinese
             ? "当前为输入框级粒度，所有记录均在生效中，无需清理"
@@ -223,8 +237,8 @@ public enum L10n {
     
     public static var cleanAllRedundantHelp: String {
         isChinese
-            ? "根据各应用的生效粒度，一键清理所有多余的输入框历史记录"
-            : "Clean all redundant field records according to each app's granularity"
+            ? "根据各应用的生效粒度与锁定状态，一键清理所有可清理的输入框记录"
+            : "Clean all cleanable field records according to each app's granularity and lock status"
     }
     
     public static var granularityHelp: String {

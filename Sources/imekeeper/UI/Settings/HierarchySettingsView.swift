@@ -689,13 +689,16 @@ private struct HierarchyRowView: View, Equatable {
     }
     
     private var cleanHelpText: String {
+        if item.isLocked {
+            return L10n.lockedAppCannotCleanHelp
+        }
         switch item.itemType {
         case .app(_, let granularity, _):
             switch granularity {
             case .app:
                 return item.canCleanSubItems ? L10n.cleanAppSubItemsHelp : L10n.noSubItemsToCleanHelp
             case .field:
-                return L10n.fieldLevelNoCleanNeededHelp
+                return item.canCleanSubItems ? L10n.cleanUnlockedFieldsHelp : L10n.noUnlockedFieldsToCleanHelp
             }
         case .field:
             return L10n.noSubItemsToCleanHelp

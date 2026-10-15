@@ -376,33 +376,146 @@ final class HierarchicalProfileStoreTests: XCTestCase {
         XCTAssertEqual(cleanedAppItem.currentSourceID, sourceApp)
     }
     
+    func testCleanSubItemsAtFieldGranularityLevelPreservesLockedFields() {
+        let appBundleID = "com.apple.Safari"
+        let field1ID = "field-search"
+        let field2ID = "field-comment"
+        
+        let ctx1 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Safari",
+            windowID: "win-1",
+            windowTitle: "Tab 1",
+            fieldID: field1ID,
+            fieldDescription: "Search"
+        )
+        let ctx2 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Safari",
+            windowID: "win-1",
+            windowTitle: "Tab 1",
+            fieldID: field2ID,
+            fieldDescription: "Comment"
+        )
+        
+        store.record(context: ctx1, sourceID: "com.apple.keylayout.US", effectiveGranularity: .field)
+        store.record(context: ctx2, sourceID: "com.apple.inputmethod.SCIM.ITABC", effectiveGranularity: .field)
+        
+        // 锁定 field1
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let appItem = tree.first!
+        let field1Item = appItem.children!.first(where: { $0.id.contains(field1ID) })!
+        store.toggleLock(for: field1Item)
+        
+        granularityManager.setGranularity(for: appBundleID, level: .field)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let targetAppItem = tree.first!
+        XCTAssertEqual(targetAppItem.children?.count, 2, "清理前应有 2 个输入框")
+        XCTAssertTrue(targetAppItem.canCleanSubItems, "在 .field 粒度下存在未锁定的输入框时，允许清理")
+        
+        // 执行 .field 粒度下的清理
+        store.cleanSubItems(for: appBundleID, granularity: .field)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let cleanedAppItem = tree.first!
+        XCTAssertEqual(cleanedAppItem.children?.count, 1, "清理后应仅保留 1 个锁定的输入框")
+        XCTAssertEqual(cleanedAppItem.children?.first?.id, "field:\(appBundleID):\(field1ID)")
+        XCTAssertTrue(cleanedAppItem.children!.first!.isLocked, "保留的输入框必须是锁定状态")
+        XCTAssertFalse(cleanedAppItem.canCleanSubItems, "已无任何未锁定输入框，清理按钮应当置灰禁用")
+    }
+    
+    func testLockedAppProtectsSubItemsFromCleaning() {
+        let appBundleID = "com.apple.Xcode"
+        let ctx = FocusContext(
+            bundleID: appBundleID,
+            appName: "Xcode",
+            windowID: "win-1",
+            windowTitle: "Main",
+            fieldID: "editor",
+            fieldDescription: "Code"
+        )
+        store.record(context: ctx, sourceID: "com.apple.keylayout.US", effectiveGranularity: .field)
+        granularityManager.setGranularity(for: appBundleID, level: .app)
+        
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        var appItem = tree.first!
+        XCTAssertTrue(appItem.canCleanSubItems)
+        
+        // 锁定该 App
+        store.toggleLock(for: appItem)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        appItem = tree.first!
+        XCTAssertTrue(appItem.isLocked)
+        XCTAssertFalse(appItem.canCleanSubItems, "App 锁定状态下，下级输入框受保护，清理按钮必须置灰禁用")
+        
+        // 尝试执行清理：预期无操作，受锁定保护
+        store.cleanSubItems(for: appBundleID, granularity: .app)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let protectedApp = tree.first!
+        XCTAssertEqual(protectedApp.children?.count, 1, "App 锁定状态下，cleanSubItems 不得删除其下级输入框")
+        
+        // 解锁后再次执行清理
+        store.toggleLock(for: protectedApp)
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let unlockedApp = tree.first!
+        XCTAssertTrue(unlockedApp.canCleanSubItems, "解锁后按钮恢复可用")
+        store.cleanSubItems(for: appBundleID, granularity: .app)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        XCTAssertNil(tree.first?.children, "解锁后清理成功清空下级输入框")
+    }
+    
     func testCleanAllRedundantSubItemsAcrossApps() {
-        let appA = "com.apple.Terminal" // will be .app
-        let appC = "com.apple.Notes"    // will be .field
+        let appA = "com.apple.Terminal" // .app, unlocked
+        let appB = "com.apple.Xcode"    // .app, locked
+        let appC = "com.apple.Notes"    // .field, unlocked, has 1 locked field & 1 unlocked field
         
         let ctxA = FocusContext(bundleID: appA, appName: "Terminal", windowID: "win-term", windowTitle: "term", fieldID: "field-term")
-        let ctxC = FocusContext(bundleID: appC, appName: "Notes", windowID: "win-notes", windowTitle: "notes", fieldID: "field-notes")
+        let ctxB = FocusContext(bundleID: appB, appName: "Xcode", windowID: "win-xc", windowTitle: "xc", fieldID: "field-xc")
+        let ctxC1 = FocusContext(bundleID: appC, appName: "Notes", windowID: "win-notes", windowTitle: "notes", fieldID: "field-notes-1")
+        let ctxC2 = FocusContext(bundleID: appC, appName: "Notes", windowID: "win-notes", windowTitle: "notes", fieldID: "field-notes-2")
         
         store.record(context: ctxA, sourceID: "s1", effectiveGranularity: .field)
-        store.record(context: ctxC, sourceID: "s3", effectiveGranularity: .field)
+        store.record(context: ctxB, sourceID: "s2", effectiveGranularity: .field)
+        store.record(context: ctxC1, sourceID: "s3", effectiveGranularity: .field)
+        store.record(context: ctxC2, sourceID: "s4", effectiveGranularity: .field)
         
         granularityManager.setGranularity(for: appA, level: .app)
+        granularityManager.setGranularity(for: appB, level: .app)
         granularityManager.setGranularity(for: appC, level: .field)
         
-        XCTAssertTrue(store.hasAnyRedundantSubItems(granularityManager: granularityManager))
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        // 锁定 appB
+        let itemB = tree.first(where: { $0.id == "app:\(appB)" })!
+        store.toggleLock(for: itemB)
         
-        // 全局清理所有冗余
+        // 锁定 appC 下的 field-notes-1
+        let itemC = tree.first(where: { $0.id == "app:\(appC)" })!
+        let fieldC1 = itemC.children!.first(where: { $0.id.contains("field-notes-1") })!
+        store.toggleLock(for: fieldC1)
+        
+        XCTAssertTrue(store.hasAnyRedundantSubItems(granularityManager: granularityManager), "存在可清理项时全局检查应为 true")
+        
+        // 全局清理所有应用
         store.cleanAllRedundantSubItems(granularityManager: granularityManager)
         
-        let tree = store.buildHierarchyItems(granularityManager: granularityManager)
-        let itemA = tree.first(where: { $0.id == "app:\(appA)" })
-        let itemC = tree.first(where: { $0.id == "app:\(appC)" })
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let cleanedA = tree.first(where: { $0.id == "app:\(appA)" })
+        let cleanedB = tree.first(where: { $0.id == "app:\(appB)" })
+        let cleanedC = tree.first(where: { $0.id == "app:\(appC)" })
         
-        // appA (.app 粒度): 输入框全部清空
-        XCTAssertNil(itemA?.children)
-        // appC (.field 粒度): 输入框完整保留
-        XCTAssertEqual(itemC?.children?.count, 1)
+        // appA (.app 粒度, 未锁定): 输入框全部清空
+        XCTAssertNil(cleanedA?.children)
+        // appB (.app 粒度, 已锁定): 输入框受保护完整保留
+        XCTAssertEqual(cleanedB?.children?.count, 1)
+        // appC (.field 粒度, 未锁定): 仅保留锁定的 field-notes-1
+        XCTAssertEqual(cleanedC?.children?.count, 1)
+        XCTAssertEqual(cleanedC?.children?.first?.id, "field:\(appC):field-notes-1")
         
+        // 全局可清理项已全部打扫完毕
         XCTAssertFalse(store.hasAnyRedundantSubItems(granularityManager: granularityManager))
     }
     

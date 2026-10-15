@@ -201,13 +201,17 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
     
     /// 当前是否实际存在可清理的下级记录（用于决定按钮是否可用）
     public var canCleanSubItems: Bool {
+        // App 自身锁定状态下，下级记录受保护无法清理
+        guard !isLocked else { return false }
+        
         switch itemType {
         case .app(_, let granularity, _):
+            guard let children = children, !children.isEmpty else { return false }
             switch granularity {
             case .app:
-                return children != nil && !(children!.isEmpty)
+                return true
             case .field:
-                return false
+                return children.contains { !$0.isLocked }
             }
         case .field:
             return false

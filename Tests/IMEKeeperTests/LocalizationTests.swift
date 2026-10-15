@@ -64,6 +64,9 @@ final class LocalizationTests: XCTestCase {
             XCTAssertEqual(L10n.fieldRoleSubtitle(role: "AXTextField"), "Role: AXTextField")
             XCTAssertEqual(L10n.fieldHashSubtitle(hashPrefix: "a1b2c3d4"), "Hash: a1b2c3d4")
             XCTAssertEqual(L10n.doubleClickToRenameHelp, "Double-click to rename field")
+            XCTAssertEqual(L10n.lockedAppCannotCleanHelp, "App is locked; sub-items are protected and cannot be cleaned. Unlock app first")
+            XCTAssertEqual(L10n.cleanUnlockedFieldsHelp, "Clean unlocked fields in this app")
+            XCTAssertEqual(L10n.noUnlockedFieldsToCleanHelp, "No unlocked fields to clean")
             
             exp.fulfill()
         }
@@ -87,6 +90,9 @@ final class LocalizationTests: XCTestCase {
             XCTAssertEqual(L10n.fieldRoleSubtitle(role: "AXTextField"), "角色: AXTextField")
             XCTAssertEqual(L10n.fieldHashSubtitle(hashPrefix: "a1b2c3d4"), "哈希: a1b2c3d4")
             XCTAssertEqual(L10n.doubleClickToRenameHelp, "双击以重命名输入框")
+            XCTAssertEqual(L10n.lockedAppCannotCleanHelp, "应用已锁定，下级记录受保护无法清理，请先解锁应用")
+            XCTAssertEqual(L10n.cleanUnlockedFieldsHelp, "清理此应用下未锁定的输入框记录")
+            XCTAssertEqual(L10n.noUnlockedFieldsToCleanHelp, "无待清理的未锁定输入框记录")
             
             exp.fulfill()
         }
