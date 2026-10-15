@@ -61,6 +61,57 @@ public final class AppIconProvider: @unchecked Sendable {
         return nil
     }
     
+    /// 仅从内存缓存中快速获取应用图标（纯 O(1) 检索，绝不发生主线程磁盘 I/O 或 LaunchServices IPC）
+    /// - Parameter bundleID: 目标应用程序的 Bundle Identifier
+    /// - Returns: 若内存中存在则返回紧凑缩略图，否则返回 nil
+    public func cachedIcon(for bundleID: String) -> NSImage? {
+        let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return cache.object(forKey: trimmed as NSString)
+    }
+    
+    /// 异步解析应用程序图标，避免在 UI 渲染或列表滚动时阻塞主线程
+    /// - Parameter bundleID: 目标应用程序的 Bundle Identifier
+    /// - Returns: 解析到的缩略图 NSImage
+    public func asyncIcon(for bundleID: String) async -> NSImage? {
+        let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        
+        if let cached = cache.object(forKey: trimmed as NSString) {
+            return cached
+        }
+        
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let icon = self.icon(for: trimmed)
+                continuation.resume(returning: icon)
+            }
+        }
+    }
+    
+    /// 在后台并发队列中异步批量预热一组 Bundle ID 的应用图标至内存缓存
+    /// - Parameter bundleIDs: 需要预热的 Bundle Identifier 列表
+    public func preloadIcons(for bundleIDs: [String]) {
+        let targetIDs = bundleIDs
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !targetIDs.isEmpty else { return }
+        
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            for bundleID in targetIDs {
+                let cacheKey = bundleID as NSString
+                if self.cache.object(forKey: cacheKey) == nil {
+                    _ = self.icon(for: bundleID)
+                }
+            }
+        }
+    }
+    
     /// 生成紧凑尺寸的独立位图缩略图，避免在每帧渲染中动态对 512x512/1024x1024 大图下采样
     private func createThumbnail(from sourceImage: NSImage, targetSize: NSSize) -> NSImage {
         guard sourceImage.isValid, sourceImage.size.width > 0, sourceImage.size.height > 0 else {

@@ -75,4 +75,40 @@ final class AppIconProviderTests: XCTestCase {
         XCTAssertEqual(icon.size.width, AppConstants.UI.iconThumbnailSize)
         XCTAssertEqual(icon.size.height, AppConstants.UI.iconThumbnailSize)
     }
+    
+    func testCachedIconReturnsNilWhenNotPreloadedAndHitWhenCached() {
+        let finderBundleID = "com.apple.finder"
+        // 初始状态下内存缓存应未命中
+        XCTAssertNil(provider.cachedIcon(for: finderBundleID))
+        
+        // 解析后缓存应立即生效
+        let resolved = provider.icon(for: finderBundleID)
+        XCTAssertNotNil(resolved)
+        XCTAssertEqual(provider.cachedIcon(for: finderBundleID), resolved)
+    }
+    
+    @MainActor
+    func testAsyncIconResolvesSuccessfully() async {
+        let finderBundleID = "com.apple.finder"
+        let icon = await provider.asyncIcon(for: finderBundleID)
+        XCTAssertNotNil(icon)
+        XCTAssertEqual(icon?.size.width, AppConstants.UI.iconThumbnailSize)
+    }
+    
+    @MainActor
+    func testPreloadIconsPopulatesCacheInBackground() async throws {
+        let finderBundleID = "com.apple.finder"
+        provider.preloadIcons(for: [finderBundleID])
+        
+        var isPreloaded = false
+        for _ in 0..<20 {
+            if provider.cachedIcon(for: finderBundleID) != nil {
+                isPreloaded = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        
+        XCTAssertTrue(isPreloaded, "后台预热后内存中应能查询到 Finder 图标")
+    }
 }

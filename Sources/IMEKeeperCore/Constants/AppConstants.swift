@@ -112,6 +112,24 @@ public enum AppConstants {
         public static let rowSelectionIndicatorCornerRadius: CGFloat = 1.5
         public static let rowSelectionBackgroundOpacity: Double = 0.12
         public static let autoScrollAnimationDuration: Double = 0.25
+        
+        // 行内轻量级下拉菜单与排版常量
+        public static let menuControlHeight: CGFloat = 22.0
+        public static let menuCornerRadius: CGFloat = 5.0
+        public static let menuBorderLineWidth: CGFloat = 0.5
+        public static let menuBorderOpacity: Double = 0.2
+        public static let menuFontSize: CGFloat = 11.0
+        public static let menuChevronFontSize: CGFloat = 8.0
+        public static let menuHorizontalPadding: CGFloat = 6.0
+        public static let menuVerticalPadding: CGFloat = 3.0
+        public static let menuContentSpacing: CGFloat = 4.0
+        public static let menuSpacerMinLength: CGFloat = 2.0
+        public static let deleteButtonFontSize: CGFloat = 11.0
+        public static let rowTitleFontSize: CGFloat = 13.0
+        public static let rowSubtitleFontSize: CGFloat = 10.0
+        public static let rowContentSpacing: CGFloat = 8.0
+        public static let rowTextSpacing: CGFloat = 1.0
+        public static let rowHorizontalPadding: CGFloat = 4.0
     }
     
     /// 系统服务与开机自启常量

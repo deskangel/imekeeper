@@ -106,12 +106,7 @@ public struct HierarchySettingsView: View {
                     Text(L10n.liveFocusedPrefix)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    if let icon = AppIconProvider.shared.icon(for: context.bundleID) {
-                        Image(nsImage: icon)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: AppConstants.UI.liveStatusAppIconSize, height: AppConstants.UI.liveStatusAppIconSize)
-                    }
+                    AppRowIconView(bundleID: context.bundleID, iconSize: AppConstants.UI.liveStatusAppIconSize)
                     Text(context.appName)
                         .font(.caption.bold())
                     Text("›")
@@ -254,6 +249,40 @@ private func levelColor(for level: GranularityLevel) -> Color {
     }
 }
 
+/// 异步非阻塞应用图标视图：优先走内存 O(1) 缓存，未命中时展示占位符并后台异步加载回填，杜绝主线程卡顿
+struct AppRowIconView: View {
+    let bundleID: String
+    var iconSize: CGFloat = AppConstants.UI.appRowIconSize
+    @State private var loadedIcon: NSImage?
+    
+    var body: some View {
+        Group {
+            if let icon = displayIcon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: iconSize, height: iconSize)
+            } else {
+                Image(systemName: "app.fill")
+                    .foregroundColor(.blue)
+                    .frame(width: iconSize, height: iconSize)
+            }
+        }
+        .task(id: bundleID) {
+            if loadedIcon == nil && AppIconProvider.shared.cachedIcon(for: bundleID) == nil {
+                let resolved = await AppIconProvider.shared.asyncIcon(for: bundleID)
+                await MainActor.run {
+                    self.loadedIcon = resolved
+                }
+            }
+        }
+    }
+    
+    private var displayIcon: NSImage? {
+        loadedIcon ?? AppIconProvider.shared.cachedIcon(for: bundleID)
+    }
+}
+
 private struct HierarchyRowView: View, Equatable {
     let item: HierarchyItem
     let isSelected: Bool
@@ -264,13 +293,19 @@ private struct HierarchyRowView: View, Equatable {
     let onChangeGranularity: (String, GranularityLevel?) -> Void
     
     nonisolated static func == (lhs: HierarchyRowView, rhs: HierarchyRowView) -> Bool {
-        lhs.item == rhs.item &&
         lhs.isSelected == rhs.isSelected &&
+        lhs.item.id == rhs.item.id &&
+        lhs.item.title == rhs.item.title &&
+        lhs.item.subtitle == rhs.item.subtitle &&
+        lhs.item.itemType == rhs.item.itemType &&
+        lhs.item.currentSourceID == rhs.item.currentSourceID &&
+        lhs.item.isLocked == rhs.item.isLocked &&
+        lhs.item.lockStatus == rhs.item.lockStatus &&
         lhs.availableSources == rhs.availableSources
     }
     
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: AppConstants.UI.rowContentSpacing) {
             // 选中指示条
             RoundedRectangle(cornerRadius: AppConstants.UI.rowSelectionIndicatorCornerRadius)
                 .fill(isSelected ? Color.accentColor : Color.clear)
@@ -283,15 +318,15 @@ private struct HierarchyRowView: View, Equatable {
             itemIcon
             
             // 标题与副标题
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: AppConstants.UI.rowTextSpacing) {
                 Text(item.title)
-                    .font(.system(size: 13, weight: (isAppNode || isSelected) ? .semibold : .regular))
+                    .font(.system(size: AppConstants.UI.rowTitleFontSize, weight: (isAppNode || isSelected) ? .semibold : .regular))
                     .foregroundColor(isSelected ? .accentColor : .primary)
                     .lineLimit(1)
                 
                 if let subtitle = item.subtitle {
                     Text(subtitle)
-                        .font(.system(size: 10))
+                        .font(.system(size: AppConstants.UI.rowSubtitleFontSize))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -304,11 +339,11 @@ private struct HierarchyRowView: View, Equatable {
             
             // 如果是 App 节点，提供生效粒度调节器
             if case .app(let bundleID, let currentGranularity) = item.itemType {
-                granularityPicker(bundleID: bundleID, current: currentGranularity)
+                granularityMenu(bundleID: bundleID, current: currentGranularity)
             }
             
             // 输入法选择器
-            inputSourcePicker
+            inputSourceMenu
             
             // 删除按钮
             Button {
@@ -316,12 +351,12 @@ private struct HierarchyRowView: View, Equatable {
             } label: {
                 Image(systemName: "trash")
                     .foregroundColor(.secondary)
-                    .font(.system(size: 11))
+                    .font(.system(size: AppConstants.UI.deleteButtonFontSize))
             }
             .buttonStyle(.borderless)
             .help(L10n.deleteItemHelp)
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, AppConstants.UI.rowHorizontalPadding)
         .frame(height: AppConstants.UI.treeRowHeight)
         .background(
             RoundedRectangle(cornerRadius: AppConstants.UI.rowSelectionCornerRadius)
@@ -419,16 +454,7 @@ private struct HierarchyRowView: View, Equatable {
     private var itemIcon: some View {
         switch item.itemType {
         case .app(let bundleID, _):
-            if let icon = AppIconProvider.shared.icon(for: bundleID) {
-                Image(nsImage: icon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: AppConstants.UI.appRowIconSize, height: AppConstants.UI.appRowIconSize)
-            } else {
-                Image(systemName: "app.fill")
-                    .foregroundColor(.blue)
-                    .frame(width: AppConstants.UI.appRowIconSize, height: AppConstants.UI.appRowIconSize)
-            }
+            AppRowIconView(bundleID: bundleID, iconSize: AppConstants.UI.appRowIconSize)
         case .window:
             Image(systemName: "macwindow")
                 .foregroundColor(.purple)
@@ -438,38 +464,92 @@ private struct HierarchyRowView: View, Equatable {
         }
     }
     
-    private func granularityPicker(bundleID: String, current: GranularityLevel) -> some View {
-        Picker("", selection: Binding(
-            get: { current },
-            set: { newLevel in
-                onChangeGranularity(bundleID, newLevel)
-            }
-        )) {
+    private func granularityMenu(bundleID: String, current: GranularityLevel) -> some View {
+        Menu {
             ForEach(GranularityLevel.allCases) { level in
-                Text(level.localizedName).tag(level)
+                Button {
+                    onChangeGranularity(bundleID, level)
+                } label: {
+                    if level == current {
+                        Label(level.localizedName, systemImage: "checkmark")
+                    } else {
+                        Text(level.localizedName)
+                    }
+                }
             }
+        } label: {
+            HStack(spacing: AppConstants.UI.menuContentSpacing) {
+                Text(current.localizedName)
+                    .font(.system(size: AppConstants.UI.menuFontSize))
+                    .lineLimit(1)
+                Spacer(minLength: AppConstants.UI.menuSpacerMinLength)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: AppConstants.UI.menuChevronFontSize, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, AppConstants.UI.menuHorizontalPadding)
+            .frame(height: AppConstants.UI.menuControlHeight)
+            .background(
+                RoundedRectangle(cornerRadius: AppConstants.UI.menuCornerRadius)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppConstants.UI.menuCornerRadius)
+                    .stroke(Color.secondary.opacity(AppConstants.UI.menuBorderOpacity), lineWidth: AppConstants.UI.menuBorderLineWidth)
+            )
         }
-        .pickerStyle(.menu)
+        .menuStyle(.borderlessButton)
         .frame(width: AppConstants.UI.rowGranularityPickerWidth)
         .help(L10n.granularityHelp)
     }
     
-    private var inputSourcePicker: some View {
-        Picker("", selection: Binding(
-            get: { item.currentSourceID },
-            set: { newID in
-                onUpdateSource(newID)
-            }
-        )) {
+    private var inputSourceMenu: some View {
+        Menu {
             ForEach(availableSources) { source in
-                Text(source.localizedName).tag(source.id)
+                Button {
+                    onUpdateSource(source.id)
+                } label: {
+                    if source.id == item.currentSourceID {
+                        Label(source.localizedName, systemImage: "checkmark")
+                    } else {
+                        Text(source.localizedName)
+                    }
+                }
             }
-            // 若不在列表中，保留原 ID 项
             if !availableSources.contains(where: { $0.id == item.currentSourceID }) {
-                Text(item.currentSourceID).tag(item.currentSourceID)
+                Button {
+                    onUpdateSource(item.currentSourceID)
+                } label: {
+                    Label(item.currentSourceID, systemImage: "checkmark")
+                }
             }
+        } label: {
+            HStack(spacing: AppConstants.UI.menuContentSpacing) {
+                Text(selectedSourceName)
+                    .font(.system(size: AppConstants.UI.menuFontSize))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: AppConstants.UI.menuSpacerMinLength)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: AppConstants.UI.menuChevronFontSize, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal, AppConstants.UI.menuHorizontalPadding)
+            .frame(height: AppConstants.UI.menuControlHeight)
+            .background(
+                RoundedRectangle(cornerRadius: AppConstants.UI.menuCornerRadius)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppConstants.UI.menuCornerRadius)
+                    .stroke(Color.secondary.opacity(AppConstants.UI.menuBorderOpacity), lineWidth: AppConstants.UI.menuBorderLineWidth)
+            )
         }
-        .pickerStyle(.menu)
+        .menuStyle(.borderlessButton)
         .frame(width: AppConstants.UI.rowInputSourcePickerWidth)
+    }
+    
+    private var selectedSourceName: String {
+        availableSources.first(where: { $0.id == item.currentSourceID })?.localizedName ?? item.currentSourceID
     }
 }

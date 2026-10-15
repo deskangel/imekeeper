@@ -67,6 +67,16 @@ public final class HierarchySettingsViewModel: ObservableObject {
             granularityManager: granularityManager,
             searchQuery: searchQuery
         )
+        
+        // 预热所有包含的应用图标至内存缓存，避免在列表滚动时触发主线程磁盘 I/O 或系统 IPC
+        let appBundleIDs = hierarchyItems.compactMap { item -> String? in
+            if case .app(let bundleID, _) = item.itemType {
+                return bundleID
+            }
+            return nil
+        }
+        AppIconProvider.shared.preloadIcons(for: appBundleIDs)
+        
         if selectedItemID == nil, let context = currentFocusContext {
             let targetAppID = "app:\(context.bundleID)"
             if hierarchyItems.contains(where: { $0.id == targetAppID }) {
