@@ -100,6 +100,11 @@ final class FocusAndNonInputPolicyTests: XCTestCase {
         
         // 明确的非输入框角色黑名单测试
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXButton", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXRadioButton", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXCheckBox", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXPopUpButton", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXWebArea", subrole: nil))
+        XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXGroup", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXList", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXOutline", subrole: nil))
         XCTAssertFalse(fingerprinter.determineIfInputField(element: dummyElement, role: "AXTable", subrole: nil))

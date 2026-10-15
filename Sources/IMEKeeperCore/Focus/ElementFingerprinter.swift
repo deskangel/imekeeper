@@ -113,7 +113,7 @@ public struct ElementFingerprinter: Sendable {
     
     /// 判定目标无障碍元素是否具备文本输入能力
     public func determineIfInputField(element: AXUIElement, role: String?, subrole: String?) -> Bool {
-        // 0. 明确的非输入框角色黑名单（优先排除大纲、列表、表格、按钮等容器）
+        // 0. 明确的非输入框角色黑名单（优先排除单选框、按钮、复选框、大纲、列表、表格等）
         if let role = role, AppConstants.Accessibility.nonInputRoles.contains(role) {
             return false
         }
@@ -139,13 +139,34 @@ public struct ElementFingerprinter: Sendable {
             }
         }
         
-        // 3. 检查是否暴露了文本选区范围属性（仅光标编辑型控件响应）
-        var selectedRangeRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef) == .success {
+        // 3. WebKit / Chromium 专有可编辑属性检查 (如 contenteditable 元素)
+        var editableRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, AppConstants.Accessibility.editableAttribute as CFString, &editableRef) == .success,
+           let isEditable = editableRef as? Bool, isEditable {
             return true
         }
         
-        // 4. 检查是否暴露了光标行号属性（代码编辑器与复杂文本框的关键特性）
+        // 4. 对于容器类角色（AXGroup, AXWebArea 等），在没有明确可编辑标记的情况下，坚决判定为非输入框
+        // 避免因后方的只读通用选区或行号属性导致误判
+        if let role = role, AppConstants.Accessibility.containerRoles.contains(role) {
+            return false
+        }
+        
+        // 5. 检查文本值是否允许被外部设置（可写性 Settable 检测）
+        var isValueSettable: DarwinBoolean = false
+        if AXUIElementIsAttributeSettable(element, kAXValueAttribute as CFString, &isValueSettable) == .success,
+           isValueSettable.boolValue {
+            return true
+        }
+        
+        // 6. 检查选中文本是否允许被外部替换（富文本编辑器关键特征）
+        var isSelectedTextSettable: DarwinBoolean = false
+        if AXUIElementIsAttributeSettable(element, kAXSelectedTextAttribute as CFString, &isSelectedTextSettable) == .success,
+           isSelectedTextSettable.boolValue {
+            return true
+        }
+        
+        // 7. 检查是否暴露了光标行号属性（代码编辑器与复杂文本框的关键特性）
         var insertionPointRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXInsertionPointLineNumberAttribute as CFString, &insertionPointRef) == .success {
             return true

@@ -109,16 +109,50 @@ public enum AppConstants {
         public static let comboBoxRole = "AXComboBox"
         public static let contentEditableSubrole = "AXContentEditable"
         public static let webAreaRole = "AXWebArea"
+        public static let groupRole = "AXGroup"
+        public static let radioButtonRole = "AXRadioButton"
+        public static let checkBoxRole = "AXCheckBox"
+        public static let popUpButtonRole = "AXPopUpButton"
+        public static let menuButtonRole = "AXMenuButton"
+        public static let tabRole = "AXTab"
+        public static let sliderRole = "AXSlider"
+        public static let colorWellRole = "AXColorWell"
+        public static let progressIndicatorRole = "AXProgressIndicator"
+        public static let levelIndicatorRole = "AXLevelIndicator"
+        public static let radioGroupRole = "AXRadioGroup"
+        public static let disclosureTriangleRole = "AXDisclosureTriangle"
+        public static let splitterRole = "AXSplitter"
         
-        /// 明确排除的非输入框角色集合（防止容器、列表或大纲被误判为输入框）
+        /// WebKit / Chromium 专有无障碍可编辑属性
+        public static let editableAttribute = "AXEditable"
+        
+        /// 容器类角色集合（默认不是输入框，除非明确携带可编辑标记）
+        public static let containerRoles: Set<String> = [
+            groupRole,
+            webAreaRole
+        ]
+        
+        /// 明确排除的非输入框角色集合（防止容器、列表、大纲、单选框、按钮等被误判为输入框）
         public static let nonInputRoles: Set<String> = [
             "AXOutline",
             "AXTable",
             "AXList",
             "AXButton",
+            radioButtonRole,
+            checkBoxRole,
+            popUpButtonRole,
+            menuButtonRole,
+            tabRole,
+            sliderRole,
+            colorWellRole,
+            progressIndicatorRole,
+            levelIndicatorRole,
+            radioGroupRole,
+            disclosureTriangleRole,
             "AXScrollArea",
             "AXScrollBar",
             "AXSplitGroup",
+            splitterRole,
             "AXTabGroup",
             "AXToolbar",
             "AXMenuBar",
