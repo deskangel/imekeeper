@@ -340,6 +340,58 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
         saveToDisk()
     }
     
+    // MARK: - Cleaning Redundant Sub-Items
+    
+    /// 清理指定应用下的下级记忆（根据粒度：若为 app 粒度，清理所有窗口和输入框；若为 window 粒度，清理所有窗口下的输入框）
+    public func cleanSubItems(for bundleID: String, granularity: GranularityLevel) {
+        lock.lock()
+        defer {
+            lock.unlock()
+            saveToDisk()
+        }
+        
+        guard var app = profiles[bundleID] else { return }
+        
+        switch granularity {
+        case .app:
+            app.windows.removeAll()
+            profiles[bundleID] = app
+        case .window:
+            for windowID in app.windows.keys {
+                app.windows[windowID]?.fields.removeAll()
+            }
+            profiles[bundleID] = app
+        case .field:
+            break
+        }
+    }
+    
+    /// 清理指定窗口下的所有输入框记录
+    public func cleanFields(for bundleID: String, windowID: String) {
+        lock.lock()
+        defer {
+            lock.unlock()
+            saveToDisk()
+        }
+        
+        guard var app = profiles[bundleID], var win = app.windows[windowID] else { return }
+        win.fields.removeAll()
+        app.windows[windowID] = win
+        profiles[bundleID] = app
+    }
+    
+    /// 根据层级项类型清理对应的下级冗余记录
+    public func clean(item: HierarchyItem) {
+        switch item.itemType {
+        case .app(let bundleID, let granularity, _):
+            cleanSubItems(for: bundleID, granularity: granularity)
+        case .window(let bundleID, let windowID):
+            cleanFields(for: bundleID, windowID: windowID)
+        case .field:
+            break
+        }
+    }
+    
     // MARK: - Tree Presentation Generator
     
     private enum HierarchySortPriority {

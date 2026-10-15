@@ -332,4 +332,158 @@ final class HierarchicalProfileStoreTests: XCTestCase {
         XCTAssertEqual(tree[1].title, "Alpha")
         XCTAssertEqual(tree[2].title, "Beta")
     }
+    
+    func testCleanSubItemsAtAppGranularityLevel() {
+        let appBundleID = "com.apple.dt.Xcode"
+        let win1ID = "win-main-1"
+        let win2ID = "win-main-2"
+        let field1ID = "field-editor"
+        let sourceApp = "com.apple.keylayout.ABC"
+        let sourceField = "com.apple.inputmethod.SCIM.ITABC"
+        
+        let ctx1 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Xcode",
+            windowID: win1ID,
+            windowTitle: "MainWindow",
+            fieldID: field1ID,
+            fieldDescription: "Editor",
+            role: "AXTextArea"
+        )
+        let ctx2 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Xcode",
+            windowID: win2ID,
+            windowTitle: "SecondWindow"
+        )
+        
+        // 记录输入框与多窗口数据
+        store.record(context: ctx1, sourceID: sourceField, effectiveGranularity: .field)
+        store.record(context: ctx2, sourceID: sourceApp, effectiveGranularity: .window)
+        
+        // 设置 Xcode 粒度为 .app
+        granularityManager.setGranularity(for: appBundleID, level: .app)
+        
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let appItem = tree.first else {
+            XCTFail("应当成功构造 App 节点")
+            return
+        }
+        
+        XCTAssertEqual(appItem.children?.count, 2, "清理前应当存在 2 个窗口记录")
+        XCTAssertTrue(appItem.canCleanSubItems, "在 .app 粒度下存在下级窗口时，应当允许清理")
+        XCTAssertTrue(appItem.isCleanActionAvailable, ".app 粒度下清理按钮应处于可用状态")
+        
+        // 执行 .app 粒度下的清理
+        store.cleanSubItems(for: appBundleID, granularity: .app)
+        
+        // 重新构建树验证
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let cleanedAppItem = tree.first else {
+            XCTFail("清理后 App 节点依然必须存在")
+            return
+        }
+        
+        XCTAssertNil(cleanedAppItem.children, "在 .app 粒度下清理后，所有下属窗口与输入框应被彻底清空")
+        XCTAssertFalse(cleanedAppItem.canCleanSubItems, "清理完成后无下级冗余项，按钮应当置灰禁用")
+        // 验证 App 自身输入法记忆不受影响
+        XCTAssertEqual(cleanedAppItem.currentSourceID, sourceApp)
+    }
+    
+    func testCleanSubItemsAtWindowGranularityLevel() {
+        let appBundleID = "com.apple.Safari"
+        let win1ID = "win-tab-1"
+        let win2ID = "win-tab-2"
+        let field1ID = "search-field"
+        let field2ID = "address-field"
+        
+        let ctx1 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Safari",
+            windowID: win1ID,
+            windowTitle: "Apple",
+            fieldID: field1ID,
+            fieldDescription: "Search",
+            role: "AXTextField"
+        )
+        let ctx2 = FocusContext(
+            bundleID: appBundleID,
+            appName: "Safari",
+            windowID: win2ID,
+            windowTitle: "Google",
+            fieldID: field2ID,
+            fieldDescription: "Address",
+            role: "AXTextField"
+        )
+        
+        store.record(context: ctx1, sourceID: "com.apple.keylayout.ABC", effectiveGranularity: .field)
+        store.record(context: ctx2, sourceID: "com.apple.inputmethod.SCIM.ITABC", effectiveGranularity: .field)
+        
+        // 设置 Safari 粒度为 .window
+        granularityManager.setGranularity(for: appBundleID, level: .window)
+        
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let appItem = tree.first else {
+            XCTFail("应当成功构造 App 节点")
+            return
+        }
+        
+        XCTAssertEqual(appItem.children?.count, 2, "应当有 2 个窗口")
+        XCTAssertEqual(appItem.children?.first?.children?.count, 1, "窗口 1 下应当有 1 个输入框")
+        XCTAssertEqual(appItem.children?.last?.children?.count, 1, "窗口 2 下应当有 1 个输入框")
+        XCTAssertTrue(appItem.canCleanSubItems, ".window 粒度下存在下级输入框，应当允许清理")
+        
+        // 执行 .window 粒度下的清理
+        store.cleanSubItems(for: appBundleID, granularity: .window)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let cleanedAppItem = tree.first else {
+            XCTFail("App 节点必须存在")
+            return
+        }
+        
+        // 窗口必须保留
+        XCTAssertEqual(cleanedAppItem.children?.count, 2, "在 .window 粒度下清理后，窗口必须完整保留")
+        // 但所有窗口下的输入框应全部清空
+        XCTAssertNil(cleanedAppItem.children?.first?.children, "窗口 1 下的输入框应已被清空")
+        XCTAssertNil(cleanedAppItem.children?.last?.children, "窗口 2 下的输入框应已被清空")
+        XCTAssertFalse(cleanedAppItem.canCleanSubItems, "所有输入框清空后，App 的清理按钮应置灰禁用")
+    }
+    
+    func testCleanSpecificWindowFields() {
+        let appBundleID = "com.test.Editor"
+        let win1ID = "win-1"
+        let field1ID = "field-1"
+        
+        let ctx = FocusContext(
+            bundleID: appBundleID,
+            appName: "Editor",
+            windowID: win1ID,
+            windowTitle: "Document",
+            fieldID: field1ID,
+            fieldDescription: "Body",
+            role: "AXTextArea"
+        )
+        store.record(context: ctx, sourceID: "com.apple.keylayout.ABC", effectiveGranularity: .field)
+        
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let winItem = tree.first?.children?.first else {
+            XCTFail("应当存在窗口项")
+            return
+        }
+        
+        XCTAssertTrue(winItem.canCleanSubItems, "窗口存在输入框时应可清理")
+        XCTAssertEqual(winItem.children?.count, 1)
+        
+        // 单独清理该窗口下的输入框
+        store.cleanFields(for: appBundleID, windowID: win1ID)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        guard let updatedWin = tree.first?.children?.first else {
+            XCTFail("窗口项仍应存在")
+            return
+        }
+        XCTAssertNil(updatedWin.children, "窗口输入框已被清空")
+        XCTAssertFalse(updatedWin.canCleanSubItems, "输入框已清空，不可再次清理")
+    }
 }

@@ -199,6 +199,22 @@ public enum L10n {
         isChinese ? "删除此项记忆" : "Delete this memory entry"
     }
     
+    public static var cleanAppSubItemsHelp: String {
+        isChinese ? "清理此应用下的窗口与输入框记录" : "Clean windows and fields in this app"
+    }
+    
+    public static var cleanAppFieldsHelp: String {
+        isChinese ? "清理此应用下的输入框记录" : "Clean fields in this app"
+    }
+    
+    public static var cleanWindowFieldsHelp: String {
+        isChinese ? "清理此窗口下的输入框记录" : "Clean fields in this window"
+    }
+    
+    public static var noSubItemsToCleanHelp: String {
+        isChinese ? "无待清理的下级记录" : "No sub-items to clean"
+    }
+    
     public static var granularityHelp: String {
         isChinese ? "设置该应用允许生效的最大追踪粒度" : "Set the maximum effective tracking granularity for this app"
     }

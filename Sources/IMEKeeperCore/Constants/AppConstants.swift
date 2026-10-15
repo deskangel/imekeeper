@@ -149,6 +149,9 @@ public enum AppConstants {
         public static let menuContentSpacing: CGFloat = 4.0
         public static let menuSpacerMinLength: CGFloat = 2.0
         public static let deleteButtonFontSize: CGFloat = 11.0
+        public static let cleanButtonFontSize: CGFloat = 11.0
+        public static let cleanButtonIconName: String = "broom"
+        public static let disabledCleanButtonOpacity: Double = 0.35
         public static let rowTitleFontSize: CGFloat = 13.0
         public static let rowSubtitleFontSize: CGFloat = 10.0
         public static let rowContentSpacing: CGFloat = 8.0

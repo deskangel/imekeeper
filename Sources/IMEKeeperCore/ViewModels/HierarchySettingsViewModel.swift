@@ -153,6 +153,24 @@ public final class HierarchySettingsViewModel: ObservableObject {
         refreshTree()
     }
     
+    /// 清理指定层级项的下级记录（App 粒度下清理窗口与输入框，Window 粒度下清理输入框）
+    public func cleanItem(_ item: HierarchyItem) {
+        store.clean(item: item)
+        refreshTree()
+    }
+    
+    /// 清理指定应用下的下级记忆（根据生效粒度）
+    public func cleanSubItems(for bundleID: String, granularity: GranularityLevel) {
+        store.cleanSubItems(for: bundleID, granularity: granularity)
+        refreshTree()
+    }
+    
+    /// 清理指定窗口下的所有输入框记录
+    public func cleanFields(for bundleID: String, windowID: String) {
+        store.cleanFields(for: bundleID, windowID: windowID)
+        refreshTree()
+    }
+    
     /// 切换某一层级节点的锁定状态
     public func toggleLock(for item: HierarchyItem) {
         store.toggleLock(for: item)

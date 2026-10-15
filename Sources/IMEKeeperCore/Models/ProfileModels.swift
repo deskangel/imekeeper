@@ -211,4 +211,35 @@ public struct HierarchyItem: Identifiable, Hashable, Sendable {
         self.lockStatus = lockStatus
         self.children = children
     }
+    
+    /// 是否支持清理下级冗余记录动作
+    public var isCleanActionAvailable: Bool {
+        switch itemType {
+        case .app(_, let granularity, _):
+            return granularity == .app || granularity == .window
+        case .window:
+            return true
+        case .field:
+            return false
+        }
+    }
+    
+    /// 当前是否实际存在可清理的下级记录（用于决定按钮是否可用）
+    public var canCleanSubItems: Bool {
+        switch itemType {
+        case .app(_, let granularity, _):
+            switch granularity {
+            case .app:
+                return children != nil && !(children!.isEmpty)
+            case .window:
+                return children?.contains { ($0.children != nil && !$0.children!.isEmpty) } ?? false
+            case .field:
+                return false
+            }
+        case .window:
+            return children != nil && !(children!.isEmpty)
+        case .field:
+            return false
+        }
+    }
 }

@@ -171,6 +171,9 @@ public struct HierarchySettingsView: View {
                         onToggleLock: {
                             viewModel.toggleLock(for: item)
                         },
+                        onClean: {
+                            viewModel.cleanItem(item)
+                        },
                         onDelete: {
                             viewModel.deleteItem(item)
                         },
@@ -304,6 +307,7 @@ private struct HierarchyRowView: View, Equatable {
     let availableSources: [InputSourceModel]
     let onUpdateSource: (String) -> Void
     let onToggleLock: () -> Void
+    let onClean: () -> Void
     let onDelete: () -> Void
     let onChangeGranularity: (String, GranularityLevel?) -> Void
     let onChangeNonInputPolicy: (String, NonInputPolicy) -> Void
@@ -317,6 +321,7 @@ private struct HierarchyRowView: View, Equatable {
         lhs.item.currentSourceID == rhs.item.currentSourceID &&
         lhs.item.isLocked == rhs.item.isLocked &&
         lhs.item.lockStatus == rhs.item.lockStatus &&
+        lhs.item.canCleanSubItems == rhs.item.canCleanSubItems &&
         lhs.availableSources == rhs.availableSources
     }
     
@@ -361,6 +366,20 @@ private struct HierarchyRowView: View, Equatable {
             
             // 输入法选择器
             inputSourceMenu
+            
+            // 清理冗余下级记录按钮
+            if item.isCleanActionAvailable {
+                Button {
+                    onClean()
+                } label: {
+                    Image(systemName: AppConstants.UI.cleanButtonIconName)
+                        .foregroundColor(item.canCleanSubItems ? .secondary : .secondary.opacity(AppConstants.UI.disabledCleanButtonOpacity))
+                        .font(.system(size: AppConstants.UI.cleanButtonFontSize))
+                }
+                .buttonStyle(.borderless)
+                .disabled(!item.canCleanSubItems)
+                .help(cleanHelpText)
+            }
             
             // 删除按钮
             Button {
@@ -464,6 +483,27 @@ private struct HierarchyRowView: View, Equatable {
             return L10n.inheritedLockHelpText
         case .unlocked:
             return L10n.unlockedHelpText
+        }
+    }
+    
+    private var cleanHelpText: String {
+        guard item.canCleanSubItems else {
+            return L10n.noSubItemsToCleanHelp
+        }
+        switch item.itemType {
+        case .app(_, let granularity, _):
+            switch granularity {
+            case .app:
+                return L10n.cleanAppSubItemsHelp
+            case .window:
+                return L10n.cleanAppFieldsHelp
+            case .field:
+                return L10n.noSubItemsToCleanHelp
+            }
+        case .window:
+            return L10n.cleanWindowFieldsHelp
+        case .field:
+            return L10n.noSubItemsToCleanHelp
         }
     }
     
