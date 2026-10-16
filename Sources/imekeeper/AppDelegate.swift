@@ -175,6 +175,30 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             
+            // 关键保护：同窗口顶层容器回退过滤
+            // 若用户上一刻处于输入框内，且当前前台应用与窗口均未改变，仅仅是焦点降级为了顶层容器（如 AXApplication / AXWindow / AXWebArea），
+            // 说明为下拉建议浮层弹出或内核瞬态过渡，绝不触发强切英文
+            let isTransientContainerFallback: Bool
+            if let prev = currentFocusContext,
+               prev.isInputField,
+               prev.bundleID == context.bundleID,
+               prev.windowID == context.windowID,
+               let role = context.role,
+               role == (kAXApplicationRole as String) || role == (kAXWindowRole as String) || role == AppConstants.Accessibility.webAreaRole {
+                isTransientContainerFallback = true
+            } else {
+                isTransientContainerFallback = false
+            }
+            
+            if isTransientContainerFallback {
+                DebugLogger.shared.logFocusEvent(
+                    context: context,
+                    actionDescription: "Transient container fallback ignored (maintained current input method '\(inputSourceManager.currentSource.localizedName)')"
+                )
+                settingsViewModel.handleFocusChanged(context)
+                return
+            }
+            
             let policy = granularityManager.effectiveNonInputPolicy(for: context.bundleID)
             switch policy {
             case .exempt:
@@ -195,6 +219,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 if inputSourceManager.currentSource.id != targetID {
                     inputSourceManager.selectSource(id: targetID)
+                    DebugLogger.shared.logFocusEvent(
+                        context: context,
+                        actionDescription: "Non-input action triggered switch to English: \(targetID)"
+                    )
                 }
                 settingsViewModel.handleFocusChanged(context)
                 return
@@ -207,6 +235,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 let targetID = inputSourceManager.defaultAsciiSourceID
                 if inputSourceManager.currentSource.id != targetID {
                     inputSourceManager.selectSource(id: targetID)
+                    DebugLogger.shared.logFocusEvent(
+                        context: context,
+                        actionDescription: "Follow global non-input policy switch to English: \(targetID)"
+                    )
                 }
                 settingsViewModel.handleFocusChanged(context)
                 return
@@ -234,6 +266,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if let targetSourceID = profileStore.queryPreferredSource(for: context, effectiveGranularity: effectiveGranularity) {
             if targetSourceID != inputSourceManager.currentSource.id {
                 inputSourceManager.selectSource(id: targetSourceID)
+                DebugLogger.shared.logFocusEvent(
+                    context: context,
+                    actionDescription: "Switched to preferred source: \(targetSourceID)"
+                )
             }
             
             // 若当前生效粒度要求追踪窗口或输入框，且当前具体层级尚未记录，则继承父级偏好并收录该节点

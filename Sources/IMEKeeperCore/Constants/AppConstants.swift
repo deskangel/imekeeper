@@ -18,6 +18,18 @@ public enum AppConstants {
         public static let permissionCheckIntervalSeconds: TimeInterval = 1.0
     }
     
+    /// 诊断与调试日志配置
+    public enum Logging {
+        /// 调试日志输出文件路径
+        public static let debugLogFilePath = "/private/tmp/imekeeper.log"
+        
+        /// 调试日志开关持久化 Key
+        public static let isDebugLoggingEnabledStorageKey = "imekeeper_is_debug_logging_enabled"
+        
+        /// 最大单次记录的文本值截断长度（保护隐私与防止日志体积膨胀）
+        public static let maxValueSnapshotLength: Int = 64
+    }
+    
     /// 存储与缓存容量配置
     public enum Storage {
         /// 持久化数据文件名

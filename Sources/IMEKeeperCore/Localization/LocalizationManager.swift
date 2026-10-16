@@ -126,6 +126,16 @@ public enum L10n {
             : "Automatically launch IME Keeper in background upon system login"
     }
     
+    public static var debugLoggingCheckbox: String {
+        isChinese ? "输出调试日志 (/private/tmp/imekeeper.log)" : "Output Debug Log (/private/tmp/imekeeper.log)"
+    }
+    
+    public static var debugLoggingHelp: String {
+        isChinese
+            ? "勾选后将焦点切换、无障碍控件属性快照及输入法决策实时写入 /private/tmp/imekeeper.log"
+            : "Log real-time focus transitions, accessibility attributes, and input source decisions to /private/tmp/imekeeper.log"
+    }
+    
     public static var menuLanguage: String {
         isChinese ? "界面语言" : "Language"
     }

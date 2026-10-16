@@ -279,6 +279,13 @@ public struct HierarchySettingsView: View {
             .toggleStyle(.checkbox)
             .help(L10n.launchAtLoginHelp)
             
+            Toggle(L10n.debugLoggingCheckbox, isOn: Binding(
+                get: { viewModel.isDebugLoggingEnabled },
+                set: { viewModel.setDebugLoggingEnabled($0) }
+            ))
+            .toggleStyle(.checkbox)
+            .help(L10n.debugLoggingHelp)
+            
             Spacer()
             
             Button {

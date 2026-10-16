@@ -13,6 +13,10 @@ public final class FocusObserver: @unchecked Sendable {
     private var currentAXObserver: AXObserver?
     private var currentAppElement: AXUIElement?
     
+    /// 上一个有效获得焦点的可编辑输入框元素与上下文（用于容器降级时的活跃性复查）
+    private var lastFocusedInputElement: AXUIElement?
+    private var lastFocusContext: FocusContext?
+    
     private var debounceWorkItem: DispatchWorkItem?
     private var onFocusChangedHandler: (@Sendable (FocusContext) -> Void)?
     
@@ -146,6 +150,8 @@ public final class FocusObserver: @unchecked Sendable {
         currentAXObserver = nil
         currentAppElement = nil
         currentPid = 0
+        lastFocusedInputElement = nil
+        lastFocusContext = nil
     }
     
     // MARK: - Notification Handling & Debounce
@@ -208,11 +214,39 @@ public final class FocusObserver: @unchecked Sendable {
                 }
             }
             
+            // 核心增强：网页输入框弹窗/候选词保护（Previous Input Field Liveness Check）
+            // 当焦点从具体的输入控件降级为顶层容器（AXApplication/AXWindow/AXWebArea）或下拉建议浮层时，
+            // 探查上一个输入控件是否仍然持有光标选区或保持聚焦状态
+            var finalElement = targetElement
+            let isTargetInput = self.fingerprinter.determineIfInputField(
+                element: targetElement,
+                role: self.copyRole(from: targetElement),
+                subrole: nil
+            )
+            
+            if !isTargetInput,
+               let lastInput = self.lastFocusedInputElement,
+               let lastContext = self.lastFocusContext,
+               lastContext.bundleID == bundleID,
+               self.checkElementStillHasCaretOrFocus(lastInput) {
+                finalElement = lastInput
+            }
+            
             let context = self.fingerprinter.resolveFocusContext(
-                from: targetElement,
+                from: finalElement,
                 runningApp: runningApp,
                 isBrowserApp: isBrowser
             )
+            
+            if context.isInputField {
+                self.lastFocusedInputElement = finalElement
+                self.lastFocusContext = context
+            }
+            
+            // 抓取现场属性快照并写入调试日志
+            let snapshot = ElementAttributeSnapshot.capture(from: finalElement)
+            DebugLogger.shared.logFocusEvent(context: context, snapshot: snapshot)
+            
             handler?(context)
         }
         
@@ -221,5 +255,47 @@ public final class FocusObserver: @unchecked Sendable {
         
         let delay = DispatchTimeInterval.milliseconds(AppConstants.Timing.focusDebounceMilliseconds)
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+    
+    private func copyRole(from element: AXUIElement) -> String? {
+        var roleRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success,
+              let roleStr = roleRef as? String else {
+            return nil
+        }
+        return roleStr
+    }
+    
+    private func checkElementStillHasCaretOrFocus(_ element: AXUIElement) -> Bool {
+        // 1. 检查元素是否仍持有无障碍焦点
+        var focusedRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXFocusedAttribute as CFString, &focusedRef) == .success,
+           let isFocused = focusedRef as? Bool, isFocused {
+            return true
+        }
+        
+        // 2. 检查元素是否仍持有文本选区/光标（CFRange）
+        var rangeRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeRef) == .success,
+           let rangeValue = rangeRef {
+            if CFGetTypeID(rangeValue) == AXValueGetTypeID() {
+                let axVal = rangeValue as! AXValue
+                if AXValueGetType(axVal) == .cfRange {
+                    var range = CFRange(location: 0, length: 0)
+                    if AXValueGetValue(axVal, .cfRange, &range) {
+                        return true
+                    }
+                }
+            }
+        }
+        
+        // 3. 检查元素是否仍持有光标行号
+        var lineRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXInsertionPointLineNumberAttribute as CFString, &lineRef) == .success,
+           lineRef != nil {
+            return true
+        }
+        
+        return false
     }
 }

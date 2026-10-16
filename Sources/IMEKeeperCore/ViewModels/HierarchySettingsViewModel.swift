@@ -19,6 +19,7 @@ public final class HierarchySettingsViewModel: ObservableObject {
     @Published public var currentActiveSource: InputSourceModel?
     @Published public var isEnabled: Bool = true
     @Published public var isAutoStartEnabled: Bool = false
+    @Published public var isDebugLoggingEnabled: Bool = DebugLogger.shared.isEnabled
     @Published public var currentLanguage: AppLanguage = LocalizationManager.shared.currentLanguage
     @Published public var selectedItemID: String?
     @Published public var expandedItemIDs: Set<String> = []
@@ -342,5 +343,11 @@ public final class HierarchySettingsViewModel: ObservableObject {
     public func setAutoStartEnabled(_ enabled: Bool) {
         autoStartManager.setAutoStartEnabled(enabled)
         self.isAutoStartEnabled = autoStartManager.isAutoStartEnabled
+    }
+    
+    /// 设置调试日志输出开关
+    public func setDebugLoggingEnabled(_ enabled: Bool) {
+        DebugLogger.shared.isEnabled = enabled
+        self.isDebugLoggingEnabled = enabled
     }
 }
