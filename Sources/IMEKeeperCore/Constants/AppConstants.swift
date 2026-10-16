@@ -2,55 +2,55 @@ import Foundation
 
 /// 系统全局常量定义，遵循严禁魔法数字与硬编码规范
 public enum AppConstants {
-    
+
     /// 防抖与时序控制参数
     public enum Timing {
         /// 焦点切换防抖延迟（毫秒）：避免快速拖拽或瞬时失焦引起的频繁切换
         public static let focusDebounceMilliseconds: Int = 35
-        
+
         /// 程序化切换输入法后的状态抑制窗口（秒）：用于忽略系统自广播的 kTISNotifySelectedKeyboardInputSourceChanged 通知
         public static let antiLoopSuppressionTimeoutSeconds: TimeInterval = 0.45
-        
+
         /// 用户手动切换输入法后的保护冷静期（秒）：在此窗口期内抑制伴随焦点事件的纠偏与非输入区切英，确保手动操作最高优先级
         public static let manualSwitchGracePeriodSeconds: TimeInterval = 0.45
-        
+
         /// 轮询或检查权限时的间隔（秒）
         public static let permissionCheckIntervalSeconds: TimeInterval = 1.0
     }
-    
+
     /// 诊断与调试日志配置
     public enum Logging {
         /// 调试日志输出文件路径
         public static let debugLogFilePath = "/private/tmp/imekeeper.log"
-        
+
         /// 调试日志开关持久化 Key
         public static let isDebugLoggingEnabledStorageKey = "imekeeper_is_debug_logging_enabled"
-        
+
         /// 最大单次记录的文本值截断长度（保护隐私与防止日志体积膨胀）
         public static let maxValueSnapshotLength: Int = 64
     }
-    
+
     /// 存储与缓存容量配置
     public enum Storage {
         /// 持久化数据文件名
         public static let profileStorageFileName = "imekeeper_profiles.json"
-        
+
         /// 粒度设置文件名
         public static let granularityStorageFileName = "imekeeper_granularity.json"
-        
+
         /// 应用程序支持目录子文件夹名称
         public static let appSupportFolderName = "IMEKeeper"
-        
+
         /// 内存中最多保留的应用层级指纹记录上限
         public static let maxAppEntriesCount: Int = 500
-        
+
         /// 单个应用下最多保留的输入框指纹数量
         public static let maxFieldEntriesPerApp: Int = 300
-        
+
         /// 应用程序语言偏好持久化 Key
         public static let appLanguageStorageKey = "imekeeper_selected_language"
     }
-    
+
     /// 终端应用 Bundle ID 集合（内置豁免非输入框切英，整视口作为输入环境）
     public enum Terminals {
         public static let knownTerminalBundleIDs: Set<String> = [
@@ -65,14 +65,14 @@ public enum AppConstants {
             "co.zeit.hyper"
         ]
     }
-    
+
     /// 纯 GPU 自绘型编辑器应用集合（如 Zed，整视口作为输入环境）
     public enum CanvasEditors {
         public static let knownCanvasEditorBundleIDs: Set<String> = [
             "dev.zed.Zed"
         ]
     }
-    
+
     /// 常见 IDE 与代码编辑器集合（需要剔除标签页文件名污染，按工作区识别物理窗口）
     public enum IDEs {
         public static let knownIDEBundleIDs: Set<String> = [
@@ -88,7 +88,7 @@ public enum AppConstants {
             "com.jetbrains.webstorm"
         ]
     }
-    
+
     /// 浏览器应用 Bundle ID 集合（对于这些应用，默认跟随限制至 Window 级别）
     public enum Browsers {
         public static let knownBrowserBundleIDs: Set<String> = [
@@ -107,12 +107,12 @@ public enum AppConstants {
             "com.kagi.kagimacOS" // Orion Browser
         ]
     }
-    
+
     /// 辅助功能与无障碍属性常量
     public enum Accessibility {
         /// 申请辅助功能弹窗提示选项 Key
         public static let trustedCheckOptionPromptKey = "AXTrustedCheckOptionPrompt"
-        
+
         /// 输入框角色与子角色标识
         public static let secureTextFieldRole = "AXSecureTextField"
         public static let textFieldRole = "AXTextField"
@@ -134,16 +134,16 @@ public enum AppConstants {
         public static let radioGroupRole = "AXRadioGroup"
         public static let disclosureTriangleRole = "AXDisclosureTriangle"
         public static let splitterRole = "AXSplitter"
-        
+
         /// WebKit / Chromium 专有无障碍可编辑属性
         public static let editableAttribute = "AXEditable"
-        
+
         /// 容器类角色集合（默认不是输入框，除非明确携带可编辑标记）
         public static let containerRoles: Set<String> = [
             groupRole,
             webAreaRole
         ]
-        
+
         /// 明确排除的非输入框角色集合（防止容器、列表、大纲、单选框、按钮等被误判为输入框）
         public static let nonInputRoles: Set<String> = [
             "AXOutline",
@@ -177,41 +177,41 @@ public enum AppConstants {
             "AXWindow",
             "AXApplication"
         ]
-        
+
         /// 窗口底层固定编号属性（私有但广泛支持，确保浏览器/文档窗口哈希稳定）
         public static let windowNumberAttribute = "_AXWindowNumber"
-        
+
         /// 自绘编辑器（如 Zed）的虚拟指纹标识与显示名
         public static let canvasEditorFieldSeed = "CanvasMainEditorArea"
         public static let canvasEditorFieldDescription = "代码编辑区 (Editor)"
-        
+
         /// 结构指纹向上追溯最大深度（深入识别 Electron/IDE 工作区容器组件）
         public static let maxHierarchyDepth: Int = 16
-        
+
         /// 针对 Electron / Chromium 及 WebKit 应用强制开启无障碍树的属性
         public static let manualAccessibilityAttribute = "AXManualAccessibility"
         public static let enhancedUserInterfaceAttribute = "AXEnhancedUserInterface"
-        
+
         /// 向上查找 AXWindow 节点的最大深度
         public static let maxWindowSearchDepth: Int = 32
-        
+
         /// 控件标识符与描述文本的最大长度限制
         public static let maxIdentifierLength: Int = 64
         public static let maxDescriptionLength: Int = 48
-        
+
         /// 未知或默认占位名
         public static let unknownWindowIdentifier = "UnknownWindow"
         public static let unknownFieldIdentifier = "UnknownField"
         public static let defaultWindowPlaceholder = "主窗口"
     }
-    
+
     /// 默认系统输入法 ID 与常见布局
     public enum InputSource {
         public static let primaryABCSourceID = "com.apple.keylayout.ABC"
         public static let primaryUSSourceID = "com.apple.keylayout.US"
         public static let fallbackAsciiSourceID = "com.apple.keylayout.ABC"
         public static let defaultAsciiSourceID = "com.apple.keylayout.ABC"
-        
+
         /// 系统官方输入法在系统英文与系统中文环境下的标准系统显示名称映射表
         public static let systemLanguageAlignedNames: [String: (en: String, zh: String)] = [
             primaryUSSourceID: (en: "U.S.", zh: "美国"),
@@ -233,7 +233,7 @@ public enum AppConstants {
             "com.apple.inputmethod.SCIM.Shuangpin": (en: "Shuangpin – Simplified", zh: "简体双拼"),
             "com.apple.inputmethod.SCIM.ITABC": (en: "Pinyin – Simplified", zh: "简体拼音")
         ]
-        
+
         /// 解析输入法的系统真实显示名称：严格跟随 macOS 系统全局语言，绝对不受 App 自身语言设置干扰
         public static func resolveNameAlignedWithSystemLanguage(
             sourceID: String,
@@ -249,22 +249,22 @@ public enum AppConstants {
                 let primary = systemLangs?.first?.lowercased() ?? Locale.preferredLanguages.first?.lowercased() ?? "en"
                 isSystemChinese = primary.hasPrefix("zh")
             }
-            
+
             if let pair = systemLanguageAlignedNames[sourceID] {
                 return isSystemChinese ? pair.zh : pair.en
             }
-            
+
             return defaultName
         }
     }
-    
+
     /// UI 布局与视图尺寸常量
     public enum UI {
-        public static let settingsWindowWidth: CGFloat = 920.0
+        public static let settingsWindowWidth: CGFloat = 1000.0
         public static let settingsWindowHeight: CGFloat = 580.0
-        public static let minSettingsWindowWidth: CGFloat = 780.0
+        public static let minSettingsWindowWidth: CGFloat = 1000.0
         public static let minSettingsWindowHeight: CGFloat = 460.0
-        
+
         public static let treeRowHeight: CGFloat = 34.0
         public static let fieldTreeRowHeight: CGFloat = 46.0
         public static let statusItemIconSize: CGFloat = 18.0
@@ -274,11 +274,11 @@ public enum AppConstants {
         public static let iconThumbnailSize: CGFloat = 32.0
         public static let iconBitmapBitsPerSample: Int = 8
         public static let iconBitmapSamplesPerPixel: Int = 4
-        
+
         public static let fieldHashDisplayLength: Int = 8
         public static let renameFieldCornerRadius: CGFloat = 3.0
         public static let renameFieldBorderWidth: CGFloat = 1.0
-        
+
         public static let languagePickerWidth: CGFloat = 130.0
         public static let globalGranularityPickerWidth: CGFloat = 175.0
         public static let rowGranularityPickerWidth: CGFloat = 135.0
@@ -291,7 +291,7 @@ public enum AppConstants {
         public static let liveStatusIndicatorSize: CGFloat = 8.0
         public static let footerDividerHeight: CGFloat = 14.0
         public static let footerSpacing: CGFloat = 16.0
-        
+
         public static let rowSelectionCornerRadius: CGFloat = 6.0
         public static let rowSelectionIndicatorWidth: CGFloat = 3.0
         public static let rowSelectionIndicatorHeight: CGFloat = 16.0
@@ -299,7 +299,7 @@ public enum AppConstants {
         public static let rowSelectionBackgroundOpacity: Double = 0.12
         public static let autoScrollAnimationDuration: Double = 0.25
         public static let autoScrollDelay: TimeInterval = 0.05
-        
+
         // 行内轻量级下拉菜单与排版常量
         public static let menuControlHeight: CGFloat = 22.0
         public static let menuCornerRadius: CGFloat = 5.0
@@ -336,13 +336,13 @@ public enum AppConstants {
         public static let rowTextSpacing: CGFloat = 1.0
         public static let rowHorizontalPadding: CGFloat = 4.0
     }
-    
+
     /// 系统服务与开机自启常量
     public enum AutoStart {
         public static let subsystem = "com.antigravity.imekeeper"
         public static let category = "AutoStartManager"
     }
-    
+
     /// 锁定状态与徽标 UI 常量
     public enum LockUI {
         public static let appLockBadgeText = "应用锁定"
@@ -350,17 +350,17 @@ public enum AppConstants {
         public static let inheritedLockBadgeTextPrefix = "继承"
         public static let lockActionText = "锁定"
         public static let unlockedActionText = "未锁定"
-        
+
         public static let lockedIconName = "lock.fill"
         public static let unlockedIconName = "lock.open"
         public static let lockShieldIconName = "lock.shield.fill"
-        
+
         public static let lockIconSize: CGFloat = 13.0
         public static let lockTextSize: CGFloat = 10.0
         public static let badgePaddingHorizontal: CGFloat = 6.0
         public static let badgePaddingVertical: CGFloat = 3.0
         public static let lockButtonWidth: CGFloat = 26.0
-        
+
         public static let appLockHelpText = "应用级锁定：此应用下的输入法已被固定，临时手动切换后不会更新设置"
         public static let fieldLockHelpText = "输入框级锁定：此输入框下的输入法已被固定，临时手动切换后不会更新设置"
         public static let inheritedLockHelpText = "受上级锁定保护：临时手动切换后不会更新设置"

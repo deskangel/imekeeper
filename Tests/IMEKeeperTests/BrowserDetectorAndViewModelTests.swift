@@ -346,4 +346,18 @@ final class BrowserDetectorAndViewModelTests: XCTestCase {
             "重新打开偏好设置时执行排序，恢复未锁定的字母排序"
         )
     }
+    
+    func testPreferencesWindowDimensionsConfiguration() {
+        XCTAssertEqual(
+            AppConstants.UI.settingsWindowWidth,
+            1000.0,
+            "默认偏好设置窗口宽度必须为 1000.0"
+        )
+        XCTAssertGreaterThan(
+            AppConstants.UI.settingsWindowWidth,
+            AppConstants.UI.minSettingsWindowWidth,
+            "默认窗口宽度必须大于最小窗口宽度限制"
+        )
+    }
 }
+
