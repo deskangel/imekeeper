@@ -126,4 +126,23 @@ final class InputSwitchAntiOscillationTests: XCTestCase {
         let queriedSource = store.queryPreferredSource(for: context, effectiveGranularity: .app)
         XCTAssertEqual(queriedSource, sourceEnglish, "App 锁定状态下，手动切换记录绝不污染锁定偏好")
     }
+    
+    func testDynamicAsciiSourceResolutionPrioritizesUSWhenABCMissing() {
+        let mockManager = MockInputSourceManager()
+        
+        // 模拟当前系统仅配置了 US (美国) 与中文输入法，不存在 ABC
+        mockManager.availableSources = [
+            InputSourceModel(id: AppConstants.InputSource.primaryUSSourceID, localizedName: "U.S.", isAsciiCapable: true, isCurrent: true),
+            InputSourceModel(id: "com.apple.inputmethod.SCIM.ITABC", localizedName: "简体拼音", isAsciiCapable: false, isCurrent: false)
+        ]
+        
+        XCTAssertEqual(mockManager.defaultAsciiSourceID, AppConstants.InputSource.primaryUSSourceID, "缺少 ABC 时，动态解析应准确返回 US")
+        
+        // 模拟当两者都存在时
+        mockManager.availableSources = [
+            InputSourceModel(id: AppConstants.InputSource.primaryABCSourceID, localizedName: "ABC", isAsciiCapable: true, isCurrent: true),
+            InputSourceModel(id: AppConstants.InputSource.primaryUSSourceID, localizedName: "U.S.", isAsciiCapable: true, isCurrent: false)
+        ]
+        XCTAssertEqual(mockManager.defaultAsciiSourceID, AppConstants.InputSource.primaryABCSourceID, "两者都存在时应返回可用 ASCII 源")
+    }
 }

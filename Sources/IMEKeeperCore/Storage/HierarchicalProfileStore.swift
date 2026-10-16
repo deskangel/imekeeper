@@ -153,8 +153,10 @@ public final class HierarchicalProfileStore: @unchecked Sendable {
             lastSourceID: sourceID
         )
         
-        // 仅在 App 自身未锁定时更新 appProfile 的输入法
-        if !appProfile.isLocked {
+        // 仅在记录目标为 App 级（或生效粒度为 app）且 App 自身未锁定时，更新 appProfile 的输入法
+        // 严格遵循隔离原则：记录具体 Field 输入法时，绝不覆盖上级 App 的独立设置
+        let shouldUpdateAppLevel = effectiveGranularity == .app || !context.isInputField || context.fieldID == nil
+        if shouldUpdateAppLevel && !appProfile.isLocked {
             appProfile.lastSourceID = sourceID
             appProfile.lastUpdated = Date()
         }

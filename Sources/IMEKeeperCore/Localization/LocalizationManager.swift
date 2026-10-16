@@ -51,7 +51,12 @@ public final class LocalizationManager: ObservableObject, @unchecked Sendable {
         if currentLanguage != .system {
             return currentLanguage
         }
-        let preferred = Locale.preferredLanguages.first?.lowercased() ?? "en"
+        
+        // 优先检查 macOS 系统全局首选项中的语言设置，确保与系统实际运行环境 100% 同步
+        let globalDefaults = UserDefaults(suiteName: ".GlobalPreferences")
+        let globalLangs = globalDefaults?.stringArray(forKey: "AppleLanguages")
+        let preferred = globalLangs?.first?.lowercased() ?? Locale.preferredLanguages.first?.lowercased() ?? "en"
+        
         if preferred.hasPrefix("zh") {
             return .zhHans
         } else {

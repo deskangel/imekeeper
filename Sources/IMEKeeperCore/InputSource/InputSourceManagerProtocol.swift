@@ -8,6 +8,9 @@ public protocol InputSourceManagerProtocol: AnyObject, Sendable {
     /// 获取系统已安装并启用的所有可用键盘输入法
     var availableSources: [InputSourceModel] { get }
     
+    /// 获取当前系统中最匹配的可用 ASCII/英文输入法 ID
+    var defaultAsciiSourceID: String { get }
+    
     /// 切换系统输入法到指定 Source ID
     /// - Parameter sourceID: 目标输入法 ID
     /// - Returns: 切换是否发起成功

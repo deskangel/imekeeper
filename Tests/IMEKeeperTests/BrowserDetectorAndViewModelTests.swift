@@ -7,6 +7,14 @@ final class MockInputSourceManager: @unchecked Sendable, InputSourceManagerProto
         InputSourceModel(id: "com.apple.keylayout.ABC", localizedName: "ABC", isAsciiCapable: true, isCurrent: true),
         InputSourceModel(id: "com.apple.inputmethod.SCIM.ITABC", localizedName: "简体拼音", isAsciiCapable: false, isCurrent: false)
     ]
+    var defaultAsciiSourceID: String {
+        if let primary = availableSources.first(where: {
+            $0.isAsciiCapable && ($0.id == AppConstants.InputSource.primaryABCSourceID || $0.id == AppConstants.InputSource.primaryUSSourceID)
+        }) {
+            return primary.id
+        }
+        return availableSources.first(where: { $0.isAsciiCapable })?.id ?? AppConstants.InputSource.fallbackAsciiSourceID
+    }
     var onUserChangedHandler: (@Sendable (InputSourceModel) -> Void)?
     
     func selectSource(id sourceID: String) -> Bool {

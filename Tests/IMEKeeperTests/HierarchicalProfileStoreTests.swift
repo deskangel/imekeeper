@@ -344,8 +344,10 @@ final class HierarchicalProfileStoreTests: XCTestCase {
         )
         
         // 记录多个输入框
+        let ctxApp = FocusContext(bundleID: appBundleID, appName: "Xcode", windowID: win1ID, windowTitle: "MainWindow", isInputField: false)
+        store.record(context: ctxApp, sourceID: sourceApp, effectiveGranularity: .app)
         store.record(context: ctx1, sourceID: sourceField, effectiveGranularity: .field)
-        store.record(context: ctx2, sourceID: sourceApp, effectiveGranularity: .field)
+        store.record(context: ctx2, sourceID: sourceField, effectiveGranularity: .field)
         
         // 设置 Xcode 粒度为 .app
         granularityManager.setGranularity(for: appBundleID, level: .app)
@@ -686,5 +688,146 @@ final class HierarchicalProfileStoreTests: XCTestCase {
         store.record(context: ctxNewSearch, sourceID: "com.apple.inputmethod.SCIM.ITABC", effectiveGranularity: .field)
         tree = store.buildHierarchyItems(granularityManager: granularityManager)
         XCTAssertEqual(tree.first?.children?.count, 2, "应用解锁后，新输入框能够正常记录")
+    }
+    
+    func testFieldLevelDoesNotOverwriteAppLevelPreferenceAndFallsBackProperly() {
+        let appBundleID = "com.google.antigravity"
+        let windowID = "win-editor"
+        let fieldID = "field-editor-textarea"
+        let sourceEnglish = "com.apple.keylayout.ABC"
+        let sourceChinese = "com.apple.inputmethod.SCIM.ITABC"
+        
+        // 1. 初始化 App 级别偏好为中文
+        let appOnlyContext = FocusContext(
+            bundleID: appBundleID,
+            appName: "Antigravity",
+            windowID: windowID,
+            windowTitle: "Workspace — Antigravity",
+            fieldID: nil,
+            fieldDescription: nil,
+            role: "AXWindow",
+            isInputField: false
+        )
+        store.record(context: appOnlyContext, sourceID: sourceChinese, effectiveGranularity: .app)
+        
+        let initialAppQueried = store.queryPreferredSource(for: appOnlyContext, effectiveGranularity: .field)
+        XCTAssertEqual(initialAppQueried, sourceChinese, "App 初始记录应当为中文")
+        
+        // 2. 在 field 粒度下聚焦 AXTextArea 输入框并设定为英文
+        let fieldContext = FocusContext(
+            bundleID: appBundleID,
+            appName: "Antigravity",
+            windowID: windowID,
+            windowTitle: "Workspace — Antigravity",
+            fieldID: fieldID,
+            fieldDescription: "多行文本区 (AXTextArea)",
+            role: "AXTextArea",
+            isInputField: true
+        )
+        store.record(context: fieldContext, sourceID: sourceEnglish, effectiveGranularity: .field)
+        
+        // 验证 Field 自身查询为英文
+        let fieldQueried = store.queryPreferredSource(for: fieldContext, effectiveGranularity: .field)
+        XCTAssertEqual(fieldQueried, sourceEnglish, "AXTextArea 应当记录并查询出英文")
+        
+        // 3. 关键验证：记录 Field 英文后，App 级基准偏好严禁被覆盖为英文，必须维持中文
+        let appAfterFieldRecord = store.queryPreferredSource(for: appOnlyContext, effectiveGranularity: .field)
+        XCTAssertEqual(appAfterFieldRecord, sourceChinese, "记录下级 Field 严禁污染上级 App 偏好")
+        
+        let tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        XCTAssertEqual(tree.first?.currentSourceID, sourceChinese, "树状大纲中 App 的输入法必须保持为中文")
+        XCTAssertEqual(tree.first?.children?.first?.currentSourceID, sourceEnglish, "树状大纲中 Field 的输入法必须保持为英文")
+    }
+    
+    func testAntigravityFieldLevelChineseWithAppUSPreferenceAndNonInputSwitch() {
+        let appBundleID = "com.google.antigravity"
+        let windowID = "win-antigravity-1"
+        let fieldID = "field-antigravity-textarea"
+        let sourceUS = AppConstants.InputSource.primaryUSSourceID
+        let sourceChinese = "com.apple.inputmethod.SCIM.ITABC"
+        
+        // 1. 设置粒度为 .field
+        granularityManager.setGranularity(for: appBundleID, level: .field)
+        
+        // 2. 模拟 App 级与 Field 级分别记录
+        let appOnlyContext = FocusContext(
+            bundleID: appBundleID,
+            appName: "Antigravity",
+            windowID: windowID,
+            windowTitle: "Antigravity",
+            isInputField: false
+        )
+        store.record(context: appOnlyContext, sourceID: sourceUS, effectiveGranularity: .app)
+        
+        let fieldContext = FocusContext(
+            bundleID: appBundleID,
+            appName: "Antigravity",
+            windowID: windowID,
+            windowTitle: "Antigravity",
+            fieldID: fieldID,
+            fieldDescription: "AXTextArea",
+            role: "AXTextArea",
+            isInputField: true
+        )
+        store.record(context: fieldContext, sourceID: sourceChinese, effectiveGranularity: .field)
+        
+        // 3. 模拟用户在设置面板分别设置与锁定 App 级（美国）与 Field 级（中文）
+        var tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let appItem = tree.first(where: { $0.id.contains(appBundleID) })!
+        store.updateSource(for: appItem, newSourceID: sourceUS)
+        store.toggleLock(for: appItem)
+        
+        tree = store.buildHierarchyItems(granularityManager: granularityManager)
+        let reloadedAppItem = tree.first(where: { $0.id.contains(appBundleID) })!
+        let fieldItem = reloadedAppItem.children!.first(where: { $0.id.contains(fieldID) })!
+        store.updateSource(for: fieldItem, newSourceID: sourceChinese)
+        
+        // 4. 验证输入框内查询为中文
+        let queryInField = store.queryPreferredSource(for: fieldContext, effectiveGranularity: .field)
+        XCTAssertEqual(queryInField, sourceChinese, "输入框内应当生效中文偏好")
+        
+        // 5. 焦点离开输入框（点击非输入区，isInputField: false）
+        let nonInputContext = FocusContext(
+            bundleID: appBundleID,
+            appName: "Antigravity",
+            windowID: windowID,
+            windowTitle: "Antigravity",
+            isInputField: false
+        )
+        let queryNonInput = store.queryPreferredSource(for: nonInputContext, effectiveGranularity: .field)
+        XCTAssertEqual(queryNonInput, sourceUS, "焦点移至非输入区时，应当回退并生效 App 级的 US 偏好")
+    }
+    
+    func testInputSourceModelFollowsSystemLocalizedName() {
+        // 场景 1: 系统全局为英文（系统输入法菜单显示 "U.S."），即使用户在 IME Keeper 中设置 App 语言为中文，输入法名称依然必须显示为 "U.S."
+        let nameInEnglishSystem = AppConstants.InputSource.resolveNameAlignedWithSystemLanguage(
+            sourceID: AppConstants.InputSource.primaryUSSourceID,
+            defaultName: "U.S.",
+            simulatedSystemLanguageIsChinese: false
+        )
+        XCTAssertEqual(nameInEnglishSystem, "U.S.", "系统为英文时，输入法名称必须跟随系统显示为 U.S.，不受 App 语言干扰")
+        
+        // 场景 2: 系统全局为中文（系统输入法菜单显示 "美国"），即使用户在 IME Keeper 中设置 App 语言为英文，输入法名称依然必须显示为 "美国"
+        let nameInChineseSystem = AppConstants.InputSource.resolveNameAlignedWithSystemLanguage(
+            sourceID: AppConstants.InputSource.primaryUSSourceID,
+            defaultName: "美国",
+            simulatedSystemLanguageIsChinese: true
+        )
+        XCTAssertEqual(nameInChineseSystem, "美国", "系统为中文时，输入法名称必须跟随系统显示为'美国'，不受 App 语言干扰")
+        
+        // 场景 3: 简体双拼在英文系统下显示 "Shuangpin – Simplified"，在中文系统下显示 "简体双拼"
+        let shuangpinEnglish = AppConstants.InputSource.resolveNameAlignedWithSystemLanguage(
+            sourceID: "com.apple.inputmethod.SCIM.Shuangpin",
+            defaultName: "Shuangpin – Simplified",
+            simulatedSystemLanguageIsChinese: false
+        )
+        XCTAssertEqual(shuangpinEnglish, "Shuangpin – Simplified")
+        
+        let shuangpinChinese = AppConstants.InputSource.resolveNameAlignedWithSystemLanguage(
+            sourceID: "com.apple.inputmethod.SCIM.Shuangpin",
+            defaultName: "简体双拼",
+            simulatedSystemLanguageIsChinese: true
+        )
+        XCTAssertEqual(shuangpinChinese, "简体双拼")
     }
 }

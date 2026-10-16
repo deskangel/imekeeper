@@ -141,7 +141,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 遇到密码输入框：静默保护，切为 ASCII 并不记录敏感上下文
         if context.isSecureField {
-            inputSourceManager.selectSource(id: AppConstants.InputSource.defaultAsciiSourceID)
+            let targetAsciiID = inputSourceManager.defaultAsciiSourceID
+            if inputSourceManager.currentSource.id != targetAsciiID {
+                inputSourceManager.selectSource(id: targetAsciiID)
+            }
             settingsViewModel.handleFocusChanged(context)
             return
         }
@@ -158,6 +161,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             isWithinManualGracePeriod = false
         }
         
+        // 解析该应用的有效生效粒度
+        let effectiveGranularity = granularityManager.effectiveGranularity(
+            for: context.bundleID,
+            isBrowser: context.isBrowserApp
+        )
+        
         // 关键前置判断：非输入框焦点行为策略判定
         if !context.isInputField {
             // 用户在保护冷静期内刚手动切换过输入法，豁免非输入区切英，绝对尊重用户刚指定的输入法
@@ -169,23 +178,40 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let policy = granularityManager.effectiveNonInputPolicy(for: context.bundleID)
             switch policy {
             case .exempt:
-                // 豁免（如终端软件或用户指定豁免）：不强切英文，也不记录脏数据，保持用户当前输入法
+                // 豁免（如终端软件或用户指定豁免）：不强切英文，按层级配置回退
                 break
-            case .alwaysEnglish, .followGlobal:
-                // 性能极致优化：当前如果已经是英文模式，直接短路返回，零系统调用开销
-                if inputSourceManager.currentSource.id != AppConstants.InputSource.defaultAsciiSourceID {
-                    inputSourceManager.selectSource(id: AppConstants.InputSource.defaultAsciiSourceID)
+            case .alwaysEnglish:
+                // 明确针对该 App 配置了非输入区切英（或全局默认切英）：
+                // 若该 App 在应用级别配置或记忆了有效的 ASCII 输入法（例如用户设置为了“美国”），优先切换至该偏好；
+                // 否则切换至系统默认的 ASCII 输入法
+                let appPreferredID = profileStore.queryPreferredSource(for: context, effectiveGranularity: effectiveGranularity)
+                let targetID: String
+                if let appID = appPreferredID,
+                   inputSourceManager.availableSources.first(where: { $0.id == appID })?.isAsciiCapable == true {
+                    targetID = appID
+                } else {
+                    targetID = inputSourceManager.defaultAsciiSourceID
+                }
+                
+                if inputSourceManager.currentSource.id != targetID {
+                    inputSourceManager.selectSource(id: targetID)
+                }
+                settingsViewModel.handleFocusChanged(context)
+                return
+            case .followGlobal:
+                // 在 field 粒度下，回退并尊重该 App 在设置面板中配置的输入法偏好；
+                // 仅在 app 粒度下由全局默认策略保障切英
+                if effectiveGranularity == .field {
+                    break
+                }
+                let targetID = inputSourceManager.defaultAsciiSourceID
+                if inputSourceManager.currentSource.id != targetID {
+                    inputSourceManager.selectSource(id: targetID)
                 }
                 settingsViewModel.handleFocusChanged(context)
                 return
             }
         }
-        
-        // 解析该应用的有效生效粒度（浏览器强制截断为 Window 级）
-        let effectiveGranularity = granularityManager.effectiveGranularity(
-            for: context.bundleID,
-            isBrowser: context.isBrowserApp
-        )
         
         // 处于保护冷静期内：
         // 若当前实际输入法与用户手动切换的目标一致，阻断时序竞态引起的旧记忆回滚；若未锁定则同步刷新偏好

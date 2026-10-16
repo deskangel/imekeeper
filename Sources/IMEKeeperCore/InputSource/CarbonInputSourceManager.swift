@@ -43,6 +43,12 @@ public final class CarbonInputSourceManager: @unchecked Sendable, InputSourceMan
         return _cachedAvailableSources
     }
     
+    public var defaultAsciiSourceID: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return resolveAsciiSourceIDWithoutLock()
+    }
+    
     public func reloadAvailableSources() {
         lock.lock()
         defer { lock.unlock() }
@@ -120,9 +126,30 @@ public final class CarbonInputSourceManager: @unchecked Sendable, InputSourceMan
     
     private var currentSourceWithoutLock: InputSourceModel {
         guard let currentTIS = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
-            return InputSourceModel.unknown(id: AppConstants.InputSource.defaultAsciiSourceID)
+            return InputSourceModel.unknown(id: resolveAsciiSourceIDWithoutLock())
         }
         return parseInputSource(currentTIS, isCurrent: true)
+    }
+    
+    private func resolveAsciiSourceIDWithoutLock() -> String {
+        // 优先级 1: 首选原生主流 ASCII 键盘 (ABC 或 US)
+        if let primary = _cachedAvailableSources.first(where: {
+            $0.isAsciiCapable && ($0.id == AppConstants.InputSource.primaryABCSourceID || $0.id == AppConstants.InputSource.primaryUSSourceID)
+        }) {
+            return primary.id
+        }
+        // 优先级 2: 其他苹果官方系统键盘布局 (keylayout) 且支持 ASCII
+        if let keylayout = _cachedAvailableSources.first(where: {
+            $0.isAsciiCapable && $0.id.hasPrefix("com.apple.keylayout")
+        }) {
+            return keylayout.id
+        }
+        // 优先级 3: 任何已启用且支持 ASCII 的输入源
+        if let anyAscii = _cachedAvailableSources.first(where: { $0.isAsciiCapable }) {
+            return anyAscii.id
+        }
+        // 兜底返回标准预设常量
+        return AppConstants.InputSource.fallbackAsciiSourceID
     }
     
     private func parseInputSource(_ source: TISInputSource, isCurrent: Bool) -> InputSourceModel {
@@ -136,6 +163,12 @@ public final class CarbonInputSourceManager: @unchecked Sendable, InputSourceMan
             nameString = Unmanaged<CFString>.fromOpaque(namePtr).takeUnretainedValue() as String
         }
         
+        // 关键核心规则：输入法的显示名称严格跟随 macOS 系统全局语言，绝对不受 App 自身语言设置干扰
+        let systemAlignedDisplayName = AppConstants.InputSource.resolveNameAlignedWithSystemLanguage(
+            sourceID: idString,
+            defaultName: nameString
+        )
+        
         var isAscii = false
         if let asciiPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsASCIICapable) {
             let cfBool = Unmanaged<CFBoolean>.fromOpaque(asciiPtr).takeUnretainedValue()
@@ -144,7 +177,7 @@ public final class CarbonInputSourceManager: @unchecked Sendable, InputSourceMan
         
         return InputSourceModel(
             id: idString,
-            localizedName: nameString,
+            localizedName: systemAlignedDisplayName,
             isAsciiCapable: isAscii,
             isCurrent: isCurrent
         )

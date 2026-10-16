@@ -193,9 +193,57 @@ public enum AppConstants {
         public static let defaultWindowPlaceholder = "主窗口"
     }
     
-    /// 默认系统输入法 ID
+    /// 默认系统输入法 ID 与常见布局
     public enum InputSource {
+        public static let primaryABCSourceID = "com.apple.keylayout.ABC"
+        public static let primaryUSSourceID = "com.apple.keylayout.US"
+        public static let fallbackAsciiSourceID = "com.apple.keylayout.ABC"
         public static let defaultAsciiSourceID = "com.apple.keylayout.ABC"
+        
+        /// 系统官方输入法在系统英文与系统中文环境下的标准系统显示名称映射表
+        public static let systemLanguageAlignedNames: [String: (en: String, zh: String)] = [
+            primaryUSSourceID: (en: "U.S.", zh: "美国"),
+            primaryABCSourceID: (en: "ABC", zh: "ABC"),
+            "com.apple.keylayout.USInternational-PC": (en: "U.S. International – PC", zh: "美式国际通用键盘 – PC"),
+            "com.apple.keylayout.USExtended": (en: "ABC – Extended", zh: "ABC – 扩展"),
+            "com.apple.keylayout.British": (en: "British", zh: "英国"),
+            "com.apple.keylayout.British-PC": (en: "British – PC", zh: "英式 – PC"),
+            "com.apple.keylayout.Dvorak": (en: "Dvorak", zh: "德沃夏克"),
+            "com.apple.keylayout.Dvorak-Left": (en: "Dvorak – Left-Handed", zh: "德沃夏克 – 左手"),
+            "com.apple.keylayout.Dvorak-Right": (en: "Dvorak – Right-Handed", zh: "德沃夏克 – 右手"),
+            "com.apple.keylayout.Colemak": (en: "Colemak", zh: "科尔马克"),
+            "com.apple.keylayout.Australian": (en: "Australian", zh: "澳大利亚"),
+            "com.apple.keylayout.Canadian": (en: "Canadian – CSA", zh: "加拿大 – CSA"),
+            "com.apple.keylayout.French": (en: "French", zh: "法国"),
+            "com.apple.keylayout.German": (en: "German", zh: "德国"),
+            "com.apple.keylayout.Spanish": (en: "Spanish", zh: "西班牙"),
+            "com.apple.keylayout.Italian": (en: "Italian", zh: "意大利"),
+            "com.apple.inputmethod.SCIM.Shuangpin": (en: "Shuangpin – Simplified", zh: "简体双拼"),
+            "com.apple.inputmethod.SCIM.ITABC": (en: "Pinyin – Simplified", zh: "简体拼音")
+        ]
+        
+        /// 解析输入法的系统真实显示名称：严格跟随 macOS 系统全局语言，绝对不受 App 自身语言设置干扰
+        public static func resolveNameAlignedWithSystemLanguage(
+            sourceID: String,
+            defaultName: String,
+            simulatedSystemLanguageIsChinese: Bool? = nil
+        ) -> String {
+            let isSystemChinese: Bool
+            if let simulated = simulatedSystemLanguageIsChinese {
+                isSystemChinese = simulated
+            } else {
+                let globalDefaults = UserDefaults(suiteName: ".GlobalPreferences")
+                let systemLangs = globalDefaults?.stringArray(forKey: "AppleLanguages")
+                let primary = systemLangs?.first?.lowercased() ?? Locale.preferredLanguages.first?.lowercased() ?? "en"
+                isSystemChinese = primary.hasPrefix("zh")
+            }
+            
+            if let pair = systemLanguageAlignedNames[sourceID] {
+                return isSystemChinese ? pair.zh : pair.en
+            }
+            
+            return defaultName
+        }
     }
     
     /// UI 布局与视图尺寸常量
