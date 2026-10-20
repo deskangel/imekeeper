@@ -81,19 +81,37 @@ public struct ElementFingerprinter: Sendable {
             normalizedDesc = description ?? ""
         }
         
-        // 计算稳定的指纹哈希（混合结构路径、角色、标识与稳定描述）
-        let fingerprintSeed = "\(bundleID)|\(structuralPath)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")|\(normalizedDesc)"
-        let fieldID = isInput ? computeSHA256(for: fingerprintSeed) : nil
-        
-        // 决定友好展示名称（优先语义描述，识别 IDE 编辑器、对话框、搜索栏等）
-        let fieldDisplayDesc = isInput ? determineFieldDisplayName(
-            identifier: identifier,
+        // 8. 针对 IDE 内置终端（如 Antigravity / VS Code 的 xterm）进行归一化，消除 Tab 序号与动态 DOM 影响
+        let isIDETerminal = isIDETerminalElement(
+            isIDE: isIDE,
+            isInput: isInput,
             description: description,
-            title: title,
             structuralPath: structuralPath,
-            role: role,
-            subrole: subrole
-        ) : nil
+            identifier: identifier
+        )
+        
+        let fieldID: String?
+        let fieldDisplayDesc: String?
+        
+        if isIDETerminal {
+            let fieldSeed = "\(bundleID)|\(AppConstants.Accessibility.ideTerminalFieldSeed)"
+            fieldID = computeSHA256(for: fieldSeed)
+            fieldDisplayDesc = AppConstants.Accessibility.ideTerminalFieldDescription
+        } else {
+            // 计算稳定的指纹哈希（混合结构路径、角色、标识与稳定描述）
+            let fingerprintSeed = "\(bundleID)|\(structuralPath)|\(role ?? "")|\(subrole ?? "")|\(identifier ?? "")|\(normalizedDesc)"
+            fieldID = isInput ? computeSHA256(for: fingerprintSeed) : nil
+            
+            // 决定友好展示名称（优先语义描述，识别 IDE 编辑器、对话框、搜索栏等）
+            fieldDisplayDesc = isInput ? determineFieldDisplayName(
+                identifier: identifier,
+                description: description,
+                title: title,
+                structuralPath: structuralPath,
+                role: role,
+                subrole: subrole
+            ) : nil
+        }
         
         return FocusContext(
             bundleID: bundleID,
@@ -107,6 +125,49 @@ public struct ElementFingerprinter: Sendable {
             isBrowserApp: isBrowserApp,
             isInputField: isInput
         )
+    }
+    
+    // MARK: - IDE Terminal Recognition
+    
+    /// 判断目标焦点元素是否为 IDE 内置终端（支持 VS Code, Antigravity, Cursor 等）
+    /// 采用精准防伪特征，绝不泛匹配文件名（如编辑 xterm.dart 或 terminal.ts 时绝不误判）
+    public func isIDETerminalElement(
+        isIDE: Bool,
+        isInput: Bool,
+        description: String?,
+        structuralPath: String,
+        identifier: String?
+    ) -> Bool {
+        guard isIDE && isInput else { return false }
+        
+        let desc = description ?? ""
+        let lowerDesc = desc.lowercased()
+        let lowerPath = structuralPath.lowercased()
+        let lowerId = identifier?.lowercased() ?? ""
+        
+        // 1. 专有防伪特征：VS Code / Antigravity 终端专有的屏幕阅读器辅助文本与帮助信息
+        // 该文本由 VS Code / Electron 终端模板原生生成，绝不会出现在普通的源代码内容或文件名中
+        if lowerDesc.contains("toggle screen reader accessibility mode") ||
+           lowerDesc.contains("terminal accessibility help") ||
+           lowerDesc.contains("终端辅助功能帮助") ||
+           lowerDesc.contains("切换屏幕读取器辅助功能模式") {
+            return true
+        }
+        
+        // 2. 结构特征：终端输入框特定的无障碍标识或面板容器
+        if lowerId == "terminal" ||
+           lowerPath.contains("workbench.panel.terminal") ||
+           lowerPath.contains("terminal.integrated") {
+            return true
+        }
+        
+        // 3. 标签前缀特征：严格以 "Terminal " 或 "终端 " 开头（如 "Terminal 1", "Terminal 4, zsh", "终端 2"）
+        // 必须为以 Terminal/终端 开头且紧随空格或数字，排除 xterm.dart, terminal_service.swift 等普通文件名
+        if desc.hasPrefix("Terminal ") || desc.hasPrefix("终端 ") {
+            return true
+        }
+        
+        return false
     }
     
     // MARK: - Input Field Determination

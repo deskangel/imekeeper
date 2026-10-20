@@ -192,6 +192,10 @@ public enum AppConstants {
         public static let manualAccessibilityAttribute = "AXManualAccessibility"
         public static let enhancedUserInterfaceAttribute = "AXEnhancedUserInterface"
 
+        /// IDE 内置终端归一化指纹标识与显示名
+        public static let ideTerminalFieldSeed = "IDECanonicalTerminal"
+        public static let ideTerminalFieldDescription = "内置终端 (Terminal)"
+
         /// 向上查找 AXWindow 节点的最大深度
         public static let maxWindowSearchDepth: Int = 32
 

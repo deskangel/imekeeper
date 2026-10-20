@@ -199,4 +199,61 @@ final class FocusAndNonInputPolicyTests: XCTestCase {
         )
         XCTAssertNotNil(contextTab1.windowID)
     }
+    
+    func testIDETerminalRecognitionAndFingerprintStabilization() {
+        let fingerprinter = ElementFingerprinter()
+        let bundleID = "com.google.antigravity-ide"
+        
+        // 场景 1：真实日志中捕获到的 Terminal 4
+        let descTerminal4 = "Terminal 4, zsh Run the command: Toggle Screen Reader Accessibility Mode for an optimized screen reader experience Use ⌥F1 for terminal accessibility help"
+        let isTerminal4 = fingerprinter.isIDETerminalElement(
+            isIDE: true,
+            isInput: true,
+            description: descTerminal4,
+            structuralPath: "AXWindow/AXGroup/AXTextField",
+            identifier: nil
+        )
+        XCTAssertTrue(isTerminal4, "带有 Terminal 4 描述的输入框应当被准确识别为 IDE 终端")
+        
+        // 场景 2：新建 Terminal 1 或重启后重开的终端
+        let descTerminal1 = "Terminal 1, zsh Run the command: Toggle Screen Reader Accessibility Mode for an optimized screen reader experience Use ⌥F1 for terminal accessibility help"
+        let isTerminal1 = fingerprinter.isIDETerminalElement(
+            isIDE: true,
+            isInput: true,
+            description: descTerminal1,
+            structuralPath: "AXWindow/AXGroup/AXTextField",
+            identifier: nil
+        )
+        XCTAssertTrue(isTerminal1, "带有 Terminal 1 描述的输入框同样应当被准确识别为 IDE 终端")
+        
+        // 场景 3：普通代码编辑框（即使当前正在编辑名为 xterm.dart 的文件）绝对不能误判为终端
+        let isXtermDartFile = fingerprinter.isIDETerminalElement(
+            isIDE: true,
+            isInput: true,
+            description: "xterm.dart",
+            structuralPath: "AXWindow/AXGroup/AXGroup#parts.editor/AXTextArea",
+            identifier: nil
+        )
+        XCTAssertFalse(isXtermDartFile, "正在编辑 xterm.dart 源码文件绝不能误判为终端")
+        
+        // 场景 4：编辑名为 terminal_service.ts 的文件同样不能误判
+        let isTerminalCodeFile = fingerprinter.isIDETerminalElement(
+            isIDE: true,
+            isInput: true,
+            description: "terminal_service.ts",
+            structuralPath: "AXWindow/AXGroup/AXGroup#parts.editor/AXTextArea",
+            identifier: nil
+        )
+        XCTAssertFalse(isTerminalCodeFile, "正在编辑 terminal_service.ts 源码文件绝不能误判为终端")
+        
+        // 场景 5：常规代码编辑器
+        let isEditor = fingerprinter.isIDETerminalElement(
+            isIDE: true,
+            isInput: true,
+            description: "Editor Content",
+            structuralPath: "AXWindow/AXGroup/AXTextField",
+            identifier: nil
+        )
+        XCTAssertFalse(isEditor, "普通编辑器不应被误判为终端")
+    }
 }
